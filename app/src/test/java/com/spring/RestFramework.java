@@ -12,7 +12,7 @@ public class RestFramework {
 
     @Test
     public void should_inject_by_constructor() {
-        Injector injector = RestFw.createInector(new RestFwModule() {
+        Injector injector = RestFw.createInjector(new RestFwModule() {
 
             @Override
             protected void configure() {
@@ -27,7 +27,7 @@ public class RestFramework {
 
     @Test
     public void should_inject_by_field() {
-        Injector injector = RestFw.createInector(new RestFwModule() {
+        Injector injector = RestFw.createInjector(new RestFwModule() {
 
             @Override
             protected void configure() {
@@ -42,7 +42,7 @@ public class RestFramework {
 
     @Test
     public void should_inject_by_method() {
-        Injector injector = RestFw.createInector(new RestFwModule() {
+        Injector injector = RestFw.createInjector(new RestFwModule() {
 
             @Override
             protected void configure() {
@@ -58,7 +58,7 @@ public class RestFramework {
 
 
     class RestFw {
-        public static Injector createInector(RestFwModule module) {
+        public static Injector createInjector(RestFwModule module) {
             return null;
         }
     }
