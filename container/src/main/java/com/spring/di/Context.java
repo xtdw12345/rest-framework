@@ -18,6 +18,13 @@ public class Context {
     }
 
     public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass) {
+        Constructor<?>[] injectConstructors = Arrays.stream(componentImplClass.getDeclaredConstructors()).filter(c -> c.isAnnotationPresent(Inject.class)).toArray(Constructor<?>[]::new);
+        if (injectConstructors.length > 1) {
+            throw new IllegalComponentException();
+        }
+        if (injectConstructors.length == 0 && Arrays.stream(componentImplClass.getDeclaredConstructors()).noneMatch(c -> c.getParameters().length == 0)) {
+            throw new IllegalComponentException();
+        }
         providerMap.put(componentClass, () -> {
             try {
                 Constructor<?> constructor = Arrays.stream(componentImplClass.getDeclaredConstructors())

@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class ContainerTest {
     Context context;
+
     @BeforeEach
     public void setUp() {
         context = new Context();
@@ -60,7 +61,22 @@ public class ContainerTest {
             assertNotNull(instance);
             assertInstanceOf(ComponentWithInjectionConstructor.class, instance);
             assertInstanceOf(DependencyWithInjectionConstructor.class, ((ComponentWithInjectionConstructor) instance).dependency());
-            assertEquals("Hello World!", ((DependencyWithInjectionConstructor)((((ComponentWithInjectionConstructor) instance).dependency()))).value());
+            assertEquals("Hello World!", ((DependencyWithInjectionConstructor) ((((ComponentWithInjectionConstructor) instance).dependency()))).value());
+        }
+
+        @Test
+        public void should_throw_illegal_exception_if_multi_inject_constructors_exist() {
+            assertThrows(IllegalComponentException.class, () -> {
+                context.bind(Component.class, ComponentWithMultiInjectConstructors.class);
+            });
+
+        }
+
+        @Test
+        public void should_throw_illegal_exception_if_no_inject_constructor_nor_default_constructor_exists() {
+            assertThrows(IllegalComponentException.class, () -> {
+                context.bind(Component.class, ComponentWithNoInjectConstructorNorDefaultConstructor.class);
+            });
         }
     }
 
@@ -73,8 +89,6 @@ public class ContainerTest {
     class MethodInjection {
 
     }
-
-
 }
 
 interface Component {
@@ -86,7 +100,23 @@ class ComponentWithDefaultConstructor implements Component {
     }
 }
 
-interface Dependency {}
+class ComponentWithMultiInjectConstructors implements Component {
+    @Inject
+    public ComponentWithMultiInjectConstructors(String name, Double value) {
+    }
+
+    @Inject
+    public ComponentWithMultiInjectConstructors(String name) {
+    }
+}
+
+class ComponentWithNoInjectConstructorNorDefaultConstructor implements Component {
+    public ComponentWithNoInjectConstructorNorDefaultConstructor(String name, Double value) {
+    }
+}
+
+interface Dependency {
+}
 
 record DependencyWithInjectionConstructor(String value) implements Dependency {
     @Inject
