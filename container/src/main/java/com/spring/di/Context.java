@@ -1,31 +1,30 @@
 package com.spring.di;
 
+import jakarta.inject.Provider;
+
 import java.util.HashMap;
 import java.util.Map;
 
 public class Context {
 
-    private Map<Class<?>, Object> components = new HashMap<>();
-    private Map<Class<?>, Class<?>> implementations = new HashMap<>();
+    private final Map<Class<?>, Provider<?>> providerMap = new HashMap<>();
 
     public <ComponentType> void bind(Class<ComponentType> componentClass, ComponentType component) {
-        components.put(componentClass, component);
+        providerMap.put(componentClass, () -> component);
     }
 
     public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass) {
-        implementations.put(componentClass, componentImplClass);
+        providerMap.put(componentClass, () -> {
+            try {
+                return componentImplClass.getDeclaredConstructor().newInstance();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     @SuppressWarnings("unchecked")
     public <ComponentType> ComponentType getInstance(Class<ComponentType> componentClass) {
-        if (components.containsKey(componentClass)) {
-            return (ComponentType) components.get(componentClass);
-        }
-        Class<?> implementationClass = implementations.get(componentClass);
-        try {
-            return (ComponentType) implementationClass.getDeclaredConstructor().newInstance();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return (ComponentType) providerMap.get(componentClass).get();
     }
 }
