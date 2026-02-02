@@ -1,46 +1,67 @@
 package com.spring.di;
 
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 public class ContainerTest {
-
-    public interface Component {
-
+    Context context;
+    @BeforeEach
+    public void setUp() {
+        context = new Context();
     }
 
-    public static class ComponentImpl implements Component {
-        public ComponentImpl() {
+    @Nested
+    class InstanceBinding {
+        @Test
+        public void should_bind_type_to_an_instance() {
+
+            Component component = new Component() {
+            };
+            context.bind(Component.class, component);
+
+            Component instance = context.getInstance(Component.class);
+            Assertions.assertSame(component, instance);
         }
-    }
-
-    @Test
-    public void should_bind_type_to_an_instance() {
-        Context context = new Context();
-        Component component = new Component() {
-        };
-        context.bind(Component.class, component);
-
-        Component instance = context.getInstance(Component.class);
-        Assertions.assertSame(component, instance);
     }
 
     @Nested
     class ConstructorInjection {
-        // TODO constructor with no args
         @Test
-        public void should_bind_type_to_a_class_with_no_constructor_args() {
-            Context context = new Context();
-            context.bind(Component.class, ComponentImpl.class);
+        public void should_bind_type_to_a_class_with_default_constructor() {
+            context.bind(Component.class, ComponentWithDefaultConstructor.class);
             Component instance = context.getInstance(Component.class);
-            Assertions.assertNotNull(instance);
-            Assertions.assertTrue(instance instanceof ComponentImpl);
+            assertNotNull(instance);
+            assertInstanceOf(ComponentWithDefaultConstructor.class, instance);
         }
 
-        // TODO constructor with type
+        @Test
+        public void should_bind_type_to_a_class_with_injection_constructor() {
+            context.bind(Component.class, ComponentWithInjectionConstructor.class);
+            Dependency dependency = new Dependency() {
+            };
+            context.bind(Dependency.class, dependency);
+            Component instance = context.getInstance(Component.class);
+            assertNotNull(instance);
+            assertInstanceOf(ComponentWithInjectionConstructor.class, instance);
+            assertSame(dependency, ((ComponentWithInjectionConstructor) instance).dependency());
+        }
 
-        // TODO nested constructor
+        @Test
+        public void should_bind_type_to_a_class_with_nested_injection_constructor() {
+            context.bind(Component.class, ComponentWithInjectionConstructor.class);
+            context.bind(Dependency.class, DependencyWithInjectionConstructor.class);
+            context.bind(String.class, "Hello World!");
+            Component instance = context.getInstance(Component.class);
+            assertNotNull(instance);
+            assertInstanceOf(ComponentWithInjectionConstructor.class, instance);
+            assertInstanceOf(DependencyWithInjectionConstructor.class, ((ComponentWithInjectionConstructor) instance).dependency());
+            assertEquals("Hello World!", ((DependencyWithInjectionConstructor)((((ComponentWithInjectionConstructor) instance).dependency()))).value());
+        }
     }
 
     @Nested
@@ -51,6 +72,31 @@ public class ContainerTest {
     @Nested
     class MethodInjection {
 
+    }
+
+
+}
+
+interface Component {
+
+}
+
+class ComponentWithDefaultConstructor implements Component {
+    public ComponentWithDefaultConstructor() {
+    }
+}
+
+interface Dependency {}
+
+record DependencyWithInjectionConstructor(String value) implements Dependency {
+    @Inject
+    DependencyWithInjectionConstructor {
+    }
+}
+
+record ComponentWithInjectionConstructor(Dependency dependency) implements Component {
+    @Inject
+    ComponentWithInjectionConstructor {
     }
 
 
