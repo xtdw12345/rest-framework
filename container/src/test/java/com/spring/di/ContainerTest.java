@@ -1,6 +1,7 @@
 package com.spring.di;
 
 import jakarta.inject.Inject;
+import lombok.Getter;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -92,6 +93,25 @@ public class ContainerTest {
                     context.get(Component.class);
                 });
             }
+
+            @Test
+            public void should_throw_exception_if_cyclic_dependency_exist() {
+                context.bind(Component.class, ComponentWithInjectionConstructor.class);
+                context.bind(Dependency.class, DependencyDependedOnComponent.class);
+                assertThrows(CyclicDependencyFoundException.class, () -> {
+                    context.get(Component.class);
+                });
+            }
+
+            @Test
+            public void should_throw_exception_if_transitive_cyclic_dependency_exist() {
+                context.bind(Component.class, ComponentWithInjectionConstructor.class);
+                context.bind(Dependency.class, DependencyDependedOnAnotherDependency.class);
+                context.bind(AnotherDependency.class, AnotherDependencyDependedOnComponent.class);
+                assertThrows(CyclicDependencyFoundException.class, () -> {
+                    context.get(Component.class);
+                });
+            }
         }
 
         @Nested
@@ -135,6 +155,16 @@ class ComponentWithNoInjectConstructorNorDefaultConstructor implements Component
 interface Dependency {
 }
 
+interface AnotherDependency {}
+
+class AnotherDependencyDependedOnComponent implements AnotherDependency {
+    private final Component component;
+    @Inject
+    public AnotherDependencyDependedOnComponent(Component component) {
+        this.component = component;
+    }
+}
+
 record DependencyWithInjectionConstructor(String value) implements Dependency {
     @Inject
     DependencyWithInjectionConstructor {
@@ -145,6 +175,21 @@ record ComponentWithInjectionConstructor(Dependency dependency) implements Compo
     @Inject
     ComponentWithInjectionConstructor {
     }
+}
 
+class DependencyDependedOnAnotherDependency implements Dependency {
+    private final AnotherDependency anotherDependency;
+    @Inject
+    public DependencyDependedOnAnotherDependency(AnotherDependency anotherDependency) {
+        this.anotherDependency = anotherDependency;
+    }
+}
 
+class DependencyDependedOnComponent implements Dependency {
+    @Getter
+    private final Component component;
+    @Inject
+    public DependencyDependedOnComponent(Component component) {
+        this.component = component;
+    }
 }
