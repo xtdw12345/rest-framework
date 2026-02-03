@@ -18,34 +18,40 @@ public class Context {
 
     public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass) {
         Constructor<?> constructor = getConstructor(componentImplClass);
-        providerMap.put(componentClass, getComponentProvider(constructor));
+        providerMap.put(componentClass, new ComponentProvider<>(componentClass, constructor));
     }
 
     public <Type> Optional<Type> get(Class<Type> componentClass) {
         return Optional.ofNullable(providerMap.get(componentClass)).map(p -> (Type) p.get());
     }
 
-    private <Type> Provider<Type> getComponentProvider(Constructor<Type> constructor) {
-        return new ComponentProvider<>(constructor);
-    }
-
     class ComponentProvider<T> implements Provider<T> {
+        private Class<?> componentClass;
         private final Constructor<T> constructor;
         private boolean constructing;
 
-        public ComponentProvider(Constructor<T> constructor) {
+        public ComponentProvider(Class<?> componentClass, Constructor<T> constructor) {
+            this.componentClass = componentClass;
             this.constructor = constructor;
         }
 
         @Override
         public T get() {
             if (constructing) {
-                throw new CyclicDependencyFoundException();
+                throw new CyclicDependencyFoundException(componentClass);
             }
             constructing = true;
             try {
-                Object[] params = Arrays.stream(constructor.getParameters()).map(p -> ((Optional<?>) Optional.ofNullable(providerMap.get(p.getType())).map(p1 -> (Object) p1.get())).orElseThrow(DependencyNotFoundException::new)).toArray();
+                Object[] params = Arrays.stream(constructor.getParameters())
+                        .map(p ->
+                                ((Optional<?>) Optional.ofNullable(providerMap.get(p.getType()))
+                                        .map(p1 -> (Object) p1.get()))
+                                        .orElseThrow(() -> new DependencyNotFoundException(componentClass, p.getType()))
+                        )
+                        .toArray();
                 return constructor.newInstance(params);
+            } catch (CyclicDependencyFoundException e) {
+                throw new CyclicDependencyFoundException(componentClass, e);
             } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
                 throw new RuntimeException(e);
             } finally {

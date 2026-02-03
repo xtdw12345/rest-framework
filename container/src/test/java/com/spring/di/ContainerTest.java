@@ -89,18 +89,27 @@ public class ContainerTest {
             @Test
             public void should_throw_exception_if_dependency_not_found() {
                 context.bind(Component.class, ComponentWithInjectionConstructor.class);
-                assertThrows(DependencyNotFoundException.class, () -> {
-                    context.get(Component.class);
-                });
+                DependencyNotFoundException dependencyNotFoundException = assertThrows(DependencyNotFoundException.class, () -> context.get(Component.class));
+                assertEquals(Dependency.class, dependencyNotFoundException.getDependency());
+            }
+
+            @Test
+            public void should_throw_exception_if_transitive_dependency_not_found() {
+                context.bind(Component.class, ComponentWithInjectionConstructor.class);
+                context.bind(Dependency.class, DependencyDependedOnAnotherDependency.class);
+                DependencyNotFoundException dependencyNotFoundException = assertThrows(DependencyNotFoundException.class, () -> context.get(Component.class));
+                assertEquals(AnotherDependency.class, dependencyNotFoundException.getDependency());
+                assertEquals(Dependency.class, dependencyNotFoundException.getComponent());
             }
 
             @Test
             public void should_throw_exception_if_cyclic_dependency_exist() {
                 context.bind(Component.class, ComponentWithInjectionConstructor.class);
                 context.bind(Dependency.class, DependencyDependedOnComponent.class);
-                assertThrows(CyclicDependencyFoundException.class, () -> {
-                    context.get(Component.class);
-                });
+                CyclicDependencyFoundException cyclicDependencyFoundException = assertThrows(CyclicDependencyFoundException.class, () -> context.get(Component.class));
+                assertEquals(2, cyclicDependencyFoundException.getComponents().size());
+                assertTrue(cyclicDependencyFoundException.getComponents().contains(Component.class));
+                assertTrue(cyclicDependencyFoundException.getComponents().contains(Dependency.class));
             }
 
             @Test
@@ -108,9 +117,7 @@ public class ContainerTest {
                 context.bind(Component.class, ComponentWithInjectionConstructor.class);
                 context.bind(Dependency.class, DependencyDependedOnAnotherDependency.class);
                 context.bind(AnotherDependency.class, AnotherDependencyDependedOnComponent.class);
-                assertThrows(CyclicDependencyFoundException.class, () -> {
-                    context.get(Component.class);
-                });
+                assertThrows(CyclicDependencyFoundException.class, () -> context.get(Component.class));
             }
         }
 
