@@ -4,10 +4,8 @@ import jakarta.inject.Inject;
 import jakarta.inject.Provider;
 
 import java.lang.reflect.Constructor;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.lang.reflect.InvocationTargetException;
+import java.util.*;
 
 public class Context {
 
@@ -21,9 +19,9 @@ public class Context {
         Constructor<?> constructor = getConstructor(componentImplClass);
         providerMap.put(componentClass, () -> {
             try {
-                Object[] params = Arrays.stream(constructor.getParameters()).map(p -> getInstance(p.getType())).toArray();
+                Object[] params = Arrays.stream(constructor.getParameters()).map(p -> get(p.getType()).orElseThrow(DependencyNotFoundException::new)).toArray();
                 return constructor.newInstance(params);
-            } catch (Exception e) {
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
                 throw new RuntimeException(e);
             }
         });
@@ -44,8 +42,7 @@ public class Context {
         });
     }
 
-    @SuppressWarnings("unchecked")
-    public <ComponentType> ComponentType getInstance(Class<ComponentType> componentClass) {
-        return (ComponentType) providerMap.get(componentClass).get();
+    public <Type> Optional<Type> get(Class<Type> componentClass) {
+        return Optional.ofNullable(providerMap.get(componentClass)).map(p -> (Type) p.get());
     }
 }
