@@ -1,5 +1,8 @@
 package com.spring.di;
 
+import com.spring.di.exception.CyclicDependencyFoundException;
+import com.spring.di.exception.DependencyNotFoundException;
+import com.spring.di.exception.IllegalComponentException;
 import jakarta.inject.Inject;
 import lombok.Getter;
 import org.junit.jupiter.api.Assertions;
@@ -124,6 +127,38 @@ public class ContainerTest {
         @Nested
         class FieldInjection {
 
+            static class ComponentWithFieldInjection implements Component {
+                @Inject
+                Dependency dependency;
+            }
+
+            @Test
+            public void should_inject_via_field() {
+                Dependency dependency = new Dependency() {
+                };
+                container.bind(Dependency.class, dependency);
+                container.bind(Component.class, ComponentWithFieldInjection.class);
+                Component component = container.getContext().get(Component.class).get();
+                assertSame(dependency, ((ComponentWithFieldInjection) component).dependency);
+            }
+
+            @Test
+            public void should_include_field_inject_dependencies_info() {
+                ConstructorInjectionProvider<ComponentWithFieldInjection> constructorInjectionProvider = new ConstructorInjectionProvider<>(ComponentWithFieldInjection.class);
+                assertArrayEquals(new Class<?>[]{Dependency.class}, constructorInjectionProvider.getDependencies().toArray());
+            }
+
+            static class SubclassWithFieldInjection extends ComponentWithFieldInjection {}
+
+            @Test
+            public void should_inject_via_superclass() {
+                Dependency dependency = new Dependency() {
+                };
+                container.bind(Dependency.class, dependency);
+                container.bind(Component.class, SubclassWithFieldInjection.class);
+                Component component = container.getContext().get(Component.class).get();
+                assertSame(dependency, ((SubclassWithFieldInjection) component).dependency);
+            }
         }
 
         @Nested

@@ -1,4 +1,4 @@
-package com.spring.di;
+package com.spring.di.exception;
 
 public class DependencyNotFoundException extends RuntimeException {
     private Class<?> component;

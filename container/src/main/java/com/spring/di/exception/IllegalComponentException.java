@@ -1,4 +1,4 @@
-package com.spring.di;
+package com.spring.di.exception;
 
 public class IllegalComponentException extends RuntimeException {
     public IllegalComponentException() {
