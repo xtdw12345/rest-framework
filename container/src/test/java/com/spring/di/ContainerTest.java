@@ -106,7 +106,7 @@ public class ContainerTest {
             public void should_throw_exception_if_cyclic_dependency_exist() {
                 container.bind(Component.class, ComponentWithInjectionConstructor.class);
                 container.bind(Dependency.class, DependencyDependedOnComponent.class);
-                CyclicDependencyFoundException cyclicDependencyFoundException = assertThrows(CyclicDependencyFoundException.class, () -> container.getContext().get(Component.class));
+                CyclicDependencyFoundException cyclicDependencyFoundException = assertThrows(CyclicDependencyFoundException.class, () -> container.getContext());
                 assertEquals(2, cyclicDependencyFoundException.getComponents().size());
                 assertTrue(cyclicDependencyFoundException.getComponents().contains(Component.class));
                 assertTrue(cyclicDependencyFoundException.getComponents().contains(Dependency.class));
@@ -117,7 +117,7 @@ public class ContainerTest {
                 container.bind(Component.class, ComponentWithInjectionConstructor.class);
                 container.bind(Dependency.class, DependencyDependedOnAnotherDependency.class);
                 container.bind(AnotherDependency.class, AnotherDependencyDependedOnComponent.class);
-                assertThrows(CyclicDependencyFoundException.class, () -> container.getContext().get(Component.class));
+                assertThrows(CyclicDependencyFoundException.class, () -> container.getContext());
             }
         }
 

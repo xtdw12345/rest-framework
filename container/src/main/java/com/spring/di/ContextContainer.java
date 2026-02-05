@@ -5,32 +5,32 @@ import jakarta.inject.Inject;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
-import java.util.List;
 
 public class ContextContainer {
 
     private final Map<Class<?>, ComponentProvider<?>> componentProviderMap = new HashMap<>();
-    private Map<Class<?>, List<Class<?>>> dependencies = new HashMap<>();
 
     public <ComponentType> void bind(Class<ComponentType> componentClass, ComponentType component) {
-        componentProviderMap.put(componentClass, context -> component);
-        dependencies.put(componentClass, new ArrayList<>());
+        componentProviderMap.put(componentClass, new ComponentProvider<ComponentType>() {
+            @Override
+            public ComponentType get(Context context) {
+                return component;
+            }
+
+            @Override
+            public List<Class<?>> getDependencies() {
+                return List.of();
+            }
+        });
     }
 
     public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass) {
         Constructor<?> constructor = getConstructor(componentImplClass);
-        componentProviderMap.put(componentClass, new InjectioinProvider<>(componentClass, constructor));
-        dependencies.put(componentClass, Arrays.stream(constructor.getParameterTypes()).toList());
+        componentProviderMap.put(componentClass, new ConstructorInjectioinProvider<>(constructor, Arrays.stream(constructor.getParameterTypes()).toList()));
     }
 
     public Context getContext() {
-        for (Class<?> component : dependencies.keySet()) {
-            for (Class<?> dependency : dependencies.get(component)) {
-                if (!dependencies.containsKey(dependency)) {
-                    throw new DependencyNotFoundException(component, dependency);
-                }
-            }
-        }
+        componentProviderMap.keySet().forEach(component -> checkDependencies(component, new Stack<>()));
         return new Context() {
             @Override
             public <Type> Optional<Type> get(Class<Type> componentClass) {
@@ -39,38 +39,50 @@ public class ContextContainer {
         };
     }
 
-    interface ComponentProvider<Type> {
-        Type get(Context context);
+    private void checkDependencies(Class<?> component, Stack<Class<?>> visiting) {
+        for (Class<?> dependency : componentProviderMap.get(component).getDependencies()) {
+            if (!componentProviderMap.containsKey(dependency)) {
+                throw new DependencyNotFoundException(component, dependency);
+            }
+            if (visiting.contains(dependency)) {
+                throw new CyclicDependencyFoundException(new HashSet<>(visiting));
+            }
+            visiting.push(dependency);
+            checkDependencies(dependency, visiting);
+            visiting.pop();
+        }
     }
 
-    class InjectioinProvider<T> implements ComponentProvider<T> {
-        private Class<?> componentClass;
-        private final Constructor<T> constructor;
-        private boolean constructing;
+    interface ComponentProvider<Type> {
+        Type get(Context context);
 
-        public InjectioinProvider(Class<?> componentClass, Constructor<T> constructor) {
-            this.componentClass = componentClass;
+        List<Class<?>> getDependencies();
+    }
+
+    static class ConstructorInjectioinProvider<T> implements ComponentProvider<T> {
+        private final Constructor<T> constructor;
+        private List<Class<?>> dependencies;
+
+        public ConstructorInjectioinProvider(Constructor<T> constructor, List<Class<?>> dependencies) {
             this.constructor = constructor;
+            this.dependencies = dependencies;
         }
 
         @Override
         public T get(Context context) {
-            if (constructing) {
-                throw new CyclicDependencyFoundException(componentClass);
-            }
-            constructing = true;
             try {
                 Object[] params = Arrays.stream(constructor.getParameters())
-                        .map(p -> context.get(p.getType()).orElseThrow(() -> new DependencyNotFoundException(componentClass, p.getType())))
+                        .map(p -> context.get(p.getType()).get())
                         .toArray();
                 return constructor.newInstance(params);
-            } catch (CyclicDependencyFoundException e) {
-                throw new CyclicDependencyFoundException(componentClass, e);
-            } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            }catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
                 throw new RuntimeException(e);
-            } finally {
-                constructing = false;
             }
+        }
+
+        @Override
+        public List<Class<?>> getDependencies() {
+            return dependencies;
         }
     }
 

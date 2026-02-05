@@ -11,6 +11,10 @@ public class CyclicDependencyFoundException extends RuntimeException {
         components.add(component);
     }
 
+    public CyclicDependencyFoundException(Set<Class<?>> components) {
+        this.components = components;
+    }
+
     public CyclicDependencyFoundException(Class<?> component, CyclicDependencyFoundException e) {
         components.add(component);
         components.addAll(e.components);
