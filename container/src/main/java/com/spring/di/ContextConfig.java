@@ -5,7 +5,7 @@ import com.spring.di.exception.DependencyNotFoundException;
 
 import java.util.*;
 
-public class ContextContainer {
+public class ContextConfig {
 
     private final Map<Class<?>, ComponentProvider<?>> componentProviderMap = new HashMap<>();
 

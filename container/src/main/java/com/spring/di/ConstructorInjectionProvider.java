@@ -6,18 +6,22 @@ import jakarta.inject.Inject;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Stream;
 
-class ConstructorInjectionProvider<T> implements ContextContainer.ComponentProvider<T> {
+import static java.util.stream.Stream.concat;
+
+class ConstructorInjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     private final Constructor<T> constructor;
     private List<Field> fields;
+    private List<Method> methods;
 
     public ConstructorInjectionProvider(Class<T> implementation) {
-        this.constructor = getConstructor(implementation);
-        this.fields = getFieldList(implementation);
+        this.constructor = getInjectConstructor(implementation);
+        this.fields = getInjectFieldList(implementation);
+        this.methods = getInjectMethodList(implementation);
     }
 
     @Override
@@ -31,6 +35,10 @@ class ConstructorInjectionProvider<T> implements ContextContainer.ComponentProvi
                 field.setAccessible(true);
                 field.set(instance, context.get(field.getType()).get());
             }
+            for (Method method : methods) {
+                method.setAccessible(true);
+                method.invoke(instance, Arrays.stream(method.getParameterTypes()).map(t -> context.get(t).get()).toArray());
+            }
             return instance;
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
@@ -39,10 +47,26 @@ class ConstructorInjectionProvider<T> implements ContextContainer.ComponentProvi
 
     @Override
     public List<Class<?>> getDependencies() {
-        return Stream.concat(fields.stream().map(Field::getType), Arrays.stream(constructor.getParameterTypes())).toList();
+        return concat(methods.stream().flatMap(m -> Arrays.stream(m.getParameterTypes())),concat(fields.stream().map(Field::getType), Arrays.stream(constructor.getParameterTypes()))).toList();
     }
 
-    private static <T> List<Field> getFieldList(Class<T> implementation) {
+    private static <T> List<Method> getInjectMethodList(Class<T> implementation) {
+        List<Method> injectMethods = new ArrayList<>();
+        Class<?> current = implementation;
+        while (Object.class != current) {
+            injectMethods.addAll(Arrays.stream(current.getDeclaredMethods())
+                    .filter(m -> m.isAnnotationPresent(Inject.class))
+                    .filter(m -> injectMethods.stream().noneMatch(c -> c.getName().equals(m.getName()) &&
+                            Arrays.equals(c.getParameterTypes(), m.getParameterTypes()))
+                    ).filter(m -> Arrays.stream(implementation.getDeclaredMethods()).filter(m1 -> !m1.isAnnotationPresent(Inject.class)).noneMatch(c -> c.getName().equals(m.getName()) &&
+                            Arrays.equals(c.getParameterTypes(), m.getParameterTypes())))
+                    .toList());
+            current = current.getSuperclass();
+        }
+        return injectMethods;
+    }
+
+    private static <T> List<Field> getInjectFieldList(Class<T> implementation) {
         List<Field> allFields = new ArrayList<>();
         Class<?> currentClass = implementation;
         while (currentClass != Object.class) {
@@ -52,7 +76,7 @@ class ConstructorInjectionProvider<T> implements ContextContainer.ComponentProvi
         return allFields;
     }
 
-    private static <T> Constructor<T> getConstructor(Class<T> componentImplClass) {
+    private static <T> Constructor<T> getInjectConstructor(Class<T> componentImplClass) {
         List<Constructor<?>> injectConstructors = Arrays.stream(componentImplClass.getDeclaredConstructors())
                 .filter(c -> c.isAnnotationPresent(Inject.class)).toList();
         if (injectConstructors.size() > 1) {
