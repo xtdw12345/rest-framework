@@ -122,6 +122,24 @@ public class ContainerTest {
                 config.bind(AnotherDependency.class, AnotherDependencyDependedOnComponent.class);
                 assertThrows(CyclicDependencyFoundException.class, () -> config.getContext());
             }
+
+            abstract class AbstractComponentWithInjectConstructor {
+                Dependency dependency;
+                @Inject
+                AbstractComponentWithInjectConstructor(Dependency dependency) {
+                    this.dependency = dependency;
+                }
+            }
+            @Test
+            public void should_throw_exception_if_abstract_class_with_inject_constructor() {
+                assertThrows(IllegalComponentException.class, () -> config.bind(AbstractComponentWithInjectConstructor.class, AbstractComponentWithInjectConstructor.class));
+            }
+
+            //TODO interface
+            @Test
+            public void should_throw_exception_if_bind_interface_class_as_component() {
+                assertThrows(IllegalComponentException.class, () -> config.bind(Component.class, Component.class));
+            }
         }
 
         @Nested
@@ -226,7 +244,6 @@ public class ContainerTest {
                 SubClassWithSuperClassInjectMethod subClassWithSuperClassInjectMethod = config.getContext().get(SubClassWithSuperClassInjectMethod.class).get();
                 assertEquals(1, subClassWithSuperClassInjectMethod.superCalled);
             }
-            //TODO not call if override method no inject annotation
             static class SubClassWithOverrideMethodNoInjectAnnotation extends SuperClassWithInjectMethod {
                 public void install() {
                     super.install();
@@ -237,6 +254,18 @@ public class ContainerTest {
                 config.bind(SubClassWithOverrideMethodNoInjectAnnotation.class, SubClassWithOverrideMethodNoInjectAnnotation.class);
                 SubClassWithOverrideMethodNoInjectAnnotation component = config.getContext().get(SubClassWithOverrideMethodNoInjectAnnotation.class).get();
                 assertEquals(0, component.superCalled);
+            }
+
+            static class ComponentWithMethodTypeParameter {
+                @Inject
+                <T> T install() {
+                    return null;
+                }
+            }
+
+            @Test
+            public void should_throw_exception_if_inject_method_have_type_parameter() {
+                assertThrows(IllegalComponentException.class, () -> config.bind(ComponentWithMethodTypeParameter.class, ComponentWithMethodTypeParameter.class));
             }
         }
     }

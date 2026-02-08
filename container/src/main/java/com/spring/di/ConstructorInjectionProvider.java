@@ -3,10 +3,7 @@ package com.spring.di;
 import com.spring.di.exception.IllegalComponentException;
 import jakarta.inject.Inject;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -19,9 +16,18 @@ class ConstructorInjectionProvider<T> implements ContextConfig.ComponentProvider
     private List<Method> methods;
 
     public ConstructorInjectionProvider(Class<T> implementation) {
+        if (Modifier.isAbstract(implementation.getModifiers())) {
+            throw new IllegalComponentException();
+        }
         this.constructor = getInjectConstructor(implementation);
         this.fields = getInjectFieldList(implementation);
         this.methods = getInjectMethodList(implementation);
+
+        this.methods.forEach((method) -> {
+            if (method.getTypeParameters().length > 0) {
+                throw new IllegalComponentException();
+            }
+        });
     }
 
     @Override
