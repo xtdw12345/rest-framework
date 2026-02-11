@@ -10,21 +10,11 @@ public class ContextConfig {
     private final Map<Class<?>, ComponentProvider<?>> componentProviderMap = new HashMap<>();
 
     public <ComponentType> void bind(Class<ComponentType> componentClass, ComponentType component) {
-        componentProviderMap.put(componentClass, new ComponentProvider<ComponentType>() {
-            @Override
-            public ComponentType get(Context context) {
-                return component;
-            }
-
-            @Override
-            public List<Class<?>> getDependencies() {
-                return List.of();
-            }
-        });
+        componentProviderMap.put(componentClass, context -> component);
     }
 
     public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass) {
-        componentProviderMap.put(componentClass, new ConstructorInjectionProvider<>(componentImplClass));
+        componentProviderMap.put(componentClass, new InjectionProvider<>(componentImplClass));
     }
 
     public Context getContext() {
@@ -54,7 +44,9 @@ public class ContextConfig {
     interface ComponentProvider<Type> {
         Type get(Context context);
 
-        List<Class<?>> getDependencies();
+        default List<Class<?>> getDependencies() {
+            return List.of();
+        }
     }
 
 }
