@@ -3,12 +3,15 @@ package com.spring.di;
 import com.spring.di.exception.CyclicDependencyFoundException;
 import com.spring.di.exception.DependencyNotFoundException;
 import jakarta.inject.Inject;
+import jakarta.inject.Provider;
 import lombok.Getter;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -62,6 +65,26 @@ public class ContainerTest {
             Optional<Component> component = config.getContext().get(Component.class);
             assertTrue(component.isEmpty());
         }
+
+        private Provider<Component> componentProvider;
+        @Test
+        public void should_retrieve_provided_component() throws Exception {
+            Component component = new Component() {};
+            config.bind(Component.class, component);
+            ParameterizedType componentProviderType = (ParameterizedType)TypeBinding.class.getDeclaredField("componentProvider").getGenericType();
+            Provider<Component> instance = (Provider<Component>)config.getContext().get(componentProviderType).get();
+            assertSame(component, instance.get());
+        }
+
+        private List<Component> componentList;
+        @Test
+        public void should_not_retrieve_provided_component_if_unsupported_container() throws Exception {
+            Component component = new Component() {};
+            config.bind(Component.class, component);
+            ParameterizedType componentProviderType = (ParameterizedType)TypeBinding.class.getDeclaredField("componentList").getGenericType();
+            assertFalse(config.getContext().get(componentProviderType).isPresent());
+        }
+
 
     }
 

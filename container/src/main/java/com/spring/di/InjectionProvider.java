@@ -117,11 +117,22 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     }
 
     private static Object toDependency(Context context, Field field) {
-        return context.get(field.getType()).get();
+        Type type = field.getGenericType();
+        if (type instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) type;
+            return context.get(parameterizedType).get();
+        }
+        return context.get((Class<?>) type).get();
     }
 
-    private static <T> Object[] toDependencies(Context context, Executable executable) {
-        return Arrays.stream(executable.getParameterTypes()).map(t -> context.get(t).get()).toArray();
+    private static Object[] toDependencies(Context context, Executable executable) {
+        return Arrays.stream(executable.getParameters()).map(p -> {
+            Type type = p.getParameterizedType();
+            if (type instanceof ParameterizedType) {
+                return context.get((ParameterizedType) type).get();
+            }
+            return context.get((Class<?>) type).get();
+        }).toArray();
     }
 
     private static <T> List<T> traverse(Class<?> component, BiFunction<Class<?>, List<T>, List<T>> toInjections) {

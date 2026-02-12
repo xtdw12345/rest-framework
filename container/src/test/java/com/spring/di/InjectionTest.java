@@ -2,14 +2,17 @@ package com.spring.di;
 
 import com.spring.di.exception.IllegalComponentException;
 import jakarta.inject.Inject;
+import jakarta.inject.Provider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.lang.reflect.ParameterizedType;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 @Nested
 class InjectionTest {
@@ -17,12 +20,14 @@ class InjectionTest {
     private Context context = Mockito.mock(Context.class);
     private Dependency dependency = new Dependency() {
     };
+    private Provider<Dependency> dependencyProvider = Mockito.mock(Provider.class);
 
     @BeforeEach
-    public void setUp() {
-        Mockito.when(config.getContext()).thenReturn(context);
+    public void setUp() throws NoSuchFieldException {
+        when(config.getContext()).thenReturn(context);
         config.bind(Dependency.class, dependency);
-        Mockito.when(context.get(Dependency.class)).thenReturn(Optional.of(dependency));
+        when(context.get(Dependency.class)).thenReturn(Optional.of(dependency));
+        when(context.get((ParameterizedType) InjectionTest.class.getDeclaredField("dependencyProvider").getGenericType())).thenReturn(Optional.of(dependencyProvider));
     }
 
     private <T, R extends T> T getComponent(Class<T> componentClass, Class<R> componentImplClass) {
@@ -52,13 +57,27 @@ class InjectionTest {
 
             @Test
             public void should_bind_type_to_a_class_with_nested_injection_constructor() {
-                Mockito.when(context.get(Dependency.class)).thenReturn(Optional.of(new DependencyWithInjectionConstructor("Hello World!")));
+                when(context.get(Dependency.class)).thenReturn(Optional.of(new DependencyWithInjectionConstructor("Hello World!")));
                 Component instance = getComponent(Component.class, ComponentWithInjectionConstructor.class);
 
                 assertNotNull(instance);
                 assertInstanceOf(ComponentWithInjectionConstructor.class, instance);
                 assertInstanceOf(DependencyWithInjectionConstructor.class, ((ComponentWithInjectionConstructor) instance).dependency);
                 assertEquals("Hello World!", ((DependencyWithInjectionConstructor) ((ComponentWithInjectionConstructor) instance).dependency).value);
+            }
+
+            static class ConstructorProviderInjection {
+                Provider<Dependency>  dependencyProvider;
+                @Inject
+                ConstructorProviderInjection(Provider<Dependency> dependencyProvider) {
+                    this.dependencyProvider = dependencyProvider;
+                }
+            }
+            @Test
+            public void should_bind_provider_type_with_constructor_injection() {
+                InjectionProvider<ConstructorProviderInjection> provider = new InjectionProvider<>(ConstructorProviderInjection.class);
+                ConstructorProviderInjection component = provider.get(context);
+                assertSame(dependencyProvider, component.dependencyProvider);
             }
         }
 
@@ -125,6 +144,16 @@ class InjectionTest {
             public void should_inject_via_superclass() {
                 Component component = getComponent(Component.class, SubclassWithFieldInjection.class);
                 assertSame(dependency, ((SubclassWithFieldInjection) component).dependency);
+            }
+
+            static class ProviderInjectByField {
+                @Inject
+                Provider<Dependency> dependency;
+            }
+            @Test
+            public void should_inject_provider_via_inject_field() {
+                InjectionProvider<ProviderInjectByField> component = new InjectionProvider<>(ProviderInjectByField.class);
+                assertSame(dependencyProvider, component.get(context).dependency);
             }
         }
 
@@ -227,6 +256,20 @@ class InjectionTest {
                 SubClassWithOverrideMethodNoInjectAnnotation component = getComponent(SubClassWithOverrideMethodNoInjectAnnotation.class, SubClassWithOverrideMethodNoInjectAnnotation.class);
 
                 assertEquals(0, component.superCalled);
+            }
+
+            static class ProviderInjectionWithMethod {
+                Provider<Dependency> dependency;
+
+                @Inject
+                public void install(Provider<Dependency> dependency) {
+                    this.dependency = dependency;
+                }
+            }
+            @Test
+            public void should_inject_provider_by_inject_method() {
+                InjectionProvider<ProviderInjectionWithMethod> component = new InjectionProvider<>(ProviderInjectionWithMethod.class);
+                assertSame(dependencyProvider, component.get(context).dependency);
             }
         }
 
