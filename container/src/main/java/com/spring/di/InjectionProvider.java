@@ -46,8 +46,9 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     }
 
     @Override
-    public List<Class<?>> getDependencies() {
-        return concat(methods.stream().flatMap(m -> Arrays.stream(m.getParameterTypes())), concat(fields.stream().map(Field::getType), Arrays.stream(constructor.getParameterTypes()))).toList();
+    public List<Type> getDependencyTypes() {
+        return concat(concat(Arrays.stream(constructor.getParameters()).map(Parameter::getParameterizedType), fields.stream().map(Field::getGenericType)),
+                methods.stream().flatMap(m -> Arrays.stream(m.getParameters()).map(Parameter::getParameterizedType))).toList();
     }
 
     private static <T> List<Method> getInjectMethodList(Class<T> component) {
@@ -117,22 +118,15 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     }
 
     private static Object toDependency(Context context, Field field) {
-        Type type = field.getGenericType();
-        if (type instanceof ParameterizedType) {
-            ParameterizedType parameterizedType = (ParameterizedType) type;
-            return context.get(parameterizedType).get();
-        }
-        return context.get((Class<?>) type).get();
+        return toDependency(context, field.getGenericType());
     }
 
     private static Object[] toDependencies(Context context, Executable executable) {
-        return Arrays.stream(executable.getParameters()).map(p -> {
-            Type type = p.getParameterizedType();
-            if (type instanceof ParameterizedType) {
-                return context.get((ParameterizedType) type).get();
-            }
-            return context.get((Class<?>) type).get();
-        }).toArray();
+        return Arrays.stream(executable.getParameters()).map(p -> toDependency(context, p.getParameterizedType())).toArray();
+    }
+
+    private static Object toDependency(Context context, Type type) {
+        return context.getType(type).get();
     }
 
     private static <T> List<T> traverse(Class<?> component, BiFunction<Class<?>, List<T>, List<T>> toInjections) {

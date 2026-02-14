@@ -11,7 +11,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -36,7 +35,7 @@ public class ContainerTest {
             };
             config.bind(Component.class, component);
 
-            Component instance = config.getContext().get(Component.class).get();
+            Component instance = (Component) config.getContext().getType(Component.class).get();
             Assertions.assertSame(component, instance);
         }
 
@@ -47,7 +46,7 @@ public class ContainerTest {
             config.bind(Dependency.class, dependency);
             config.bind(Component.class, componentClass);
 
-            Optional<Component> component = config.getContext().get(Component.class);
+            Optional<Component> component = config.getContext().getType(Component.class);
             assertTrue(component.isPresent());
             assertSame(dependency, component.get().getDependency());
         }
@@ -62,7 +61,7 @@ public class ContainerTest {
 
         @Test
         public void should_return_null_is_component_not_defined() {
-            Optional<Component> component = config.getContext().get(Component.class);
+            Optional<Component> component = config.getContext().getType(Component.class);
             assertTrue(component.isEmpty());
         }
 
@@ -72,7 +71,7 @@ public class ContainerTest {
             Component component = new Component() {};
             config.bind(Component.class, component);
             ParameterizedType componentProviderType = (ParameterizedType)TypeBinding.class.getDeclaredField("componentProvider").getGenericType();
-            Provider<Component> instance = (Provider<Component>)config.getContext().get(componentProviderType).get();
+            Provider<Component> instance = (Provider<Component>)config.getContext().getType(componentProviderType).get();
             assertSame(component, instance.get());
         }
 
@@ -82,7 +81,7 @@ public class ContainerTest {
             Component component = new Component() {};
             config.bind(Component.class, component);
             ParameterizedType componentProviderType = (ParameterizedType)TypeBinding.class.getDeclaredField("componentList").getGenericType();
-            assertFalse(config.getContext().get(componentProviderType).isPresent());
+            assertFalse(config.getContext().getType(componentProviderType).isPresent());
         }
 
 
@@ -100,11 +99,37 @@ public class ContainerTest {
             assertEquals(Component.class, dependencyNotFoundException.getComponent());
         }
 
+        static class ComponentWithProviderInjectionConstructor {
+            Provider<Dependency> dependencyProvider;
+
+            @Inject
+            public ComponentWithProviderInjectionConstructor(Provider<Dependency> dependencyProvider) {
+                this.dependencyProvider = dependencyProvider;
+            }
+        }
+        static class ComponentWithProviderInjectionField {
+            @Inject
+            Provider<Dependency> dependencyProvider;
+        }
+        static class ComponentWithProviderInjectionMethod {
+            Provider<Dependency> dependencyProvider;
+
+            @Inject
+            public void install(Provider<Dependency> dependencyProvider) {
+                this.dependencyProvider = dependencyProvider;
+            }
+        }
+
         private static Stream<Arguments> should_throw_exception_if_dependency_not_found() {
             return Stream.of(
                     Arguments.of(Named.of("Constructor injection", ComponentWithInjectionConstructor.class)),
                     Arguments.of(Named.of("Field injection", ComponentWithInjectionField.class)),
                     Arguments.of(Named.of("Method injection", ComponentWithInjectionMethod.class))
+                    ,Arguments.of(Named.of("Constructor provider injection", ComponentWithProviderInjectionConstructor.class))
+                    ,Arguments.of(Named.of("Field provider injection", ComponentWithProviderInjectionField.class))
+                    ,Arguments.of(Named.of("Method provider injection", ComponentWithProviderInjectionMethod.class))
+                    //TODO field provider injection
+                    //TODO method provider injection
             );
         }
 
@@ -173,9 +198,22 @@ public class ContainerTest {
             config.bind(AnotherDependency.class, AnotherDependencyDependedOnComponent.class);
             assertThrows(CyclicDependencyFoundException.class, () -> config.getContext());
         }
+
+        static class DependencyDependedProvidedComponentWithConstructor implements Dependency {
+            Provider<Component> componentProvider;
+            @Inject
+            DependencyDependedProvidedComponentWithConstructor(Provider<Component> componentProvider) {
+                this.componentProvider = componentProvider;
+            }
+        }
+
+        @Test
+        public void should_not_throw_exception_if_cyclic_dependency_provide_exist() {
+            config.bind(Component.class, ComponentWithInjectionConstructor.class);
+            config.bind(Dependency.class, DependencyDependedProvidedComponentWithConstructor.class);
+            assertTrue(config.getContext().getType(Component.class).isPresent());
+        }
     }
-
-
 }
 
 interface Component {
