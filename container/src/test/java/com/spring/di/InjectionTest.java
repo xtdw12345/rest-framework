@@ -8,11 +8,11 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @Nested
@@ -28,9 +28,9 @@ class InjectionTest {
     public void setUp() throws NoSuchFieldException {
         when(config.getContext()).thenReturn(context);
         config.bind(Dependency.class, dependency);
-        when(context.getType(Dependency.class)).thenReturn(Optional.of(dependency));
+        when(context.getType(eq(Context.Ref.of(Dependency.class)))).thenReturn(Optional.of(dependency));
         dependencyProviderType = InjectionTest.class.getDeclaredField("dependencyProvider").getGenericType();
-        when(context.getType(dependencyProviderType)).thenReturn(Optional.of(dependencyProvider));
+        when(context.getType(eq(Context.Ref.of(dependencyProviderType)))).thenReturn(Optional.of(dependencyProvider));
     }
 
     private <T, R extends T> T getComponent(Class<T> componentClass, Class<R> componentImplClass) {
@@ -60,7 +60,7 @@ class InjectionTest {
 
             @Test
             public void should_bind_type_to_a_class_with_nested_injection_constructor() {
-                when(context.getType(Dependency.class)).thenReturn(Optional.of(new DependencyWithInjectionConstructor("Hello World!")));
+                when(context.getType(Context.Ref.of(Dependency.class))).thenReturn(Optional.of(new DependencyWithInjectionConstructor("Hello World!")));
                 Component instance = getComponent(Component.class, ComponentWithInjectionConstructor.class);
 
                 assertNotNull(instance);
@@ -94,7 +94,7 @@ class InjectionTest {
             @Test
             public void should_include_constructor_inject_dependencies_info() {
                 InjectionProvider<ComponentWithConstructorInjection> injectionProvider = new InjectionProvider<>(ComponentWithConstructorInjection.class);
-                assertArrayEquals(new Class<?>[]{Dependency.class}, injectionProvider.getDependencyTypes().toArray());
+                assertArrayEquals(new Context.Ref[]{Context.Ref.of(Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
             }
 
             static class ComponentWithConstructorProviderInjection {
@@ -107,7 +107,7 @@ class InjectionTest {
             @Test
             public void should_include_constructor_inject_dependency_types_info() {
                 InjectionProvider<ComponentWithConstructorProviderInjection> injectionProvider = new InjectionProvider<>(ComponentWithConstructorProviderInjection.class);
-                assertArrayEquals(new Type[]{dependencyProviderType}, injectionProvider.getDependencyTypes().toArray());
+                assertArrayEquals(new Context.Ref[]{Context.Ref.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
             }
         }
 
@@ -164,7 +164,7 @@ class InjectionTest {
             @Test
             public void should_include_field_inject_dependencies_info() {
                 InjectionProvider<ComponentWithFieldInjection> injectionProvider = new InjectionProvider<>(ComponentWithFieldInjection.class);
-                assertArrayEquals(new Class<?>[]{Dependency.class}, injectionProvider.getDependencyTypes().toArray());
+                assertArrayEquals(new Context.Ref[]{Context.Ref.of(Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
             }
 
             static class ComponentWithFieldProviderInjection {
@@ -174,7 +174,7 @@ class InjectionTest {
             @Test
             public void should_include_field_inject_dependency_types_info() {
                 InjectionProvider<ComponentWithFieldProviderInjection> injectionProvider = new InjectionProvider<>(ComponentWithFieldProviderInjection.class);
-                assertArrayEquals(new Type[]{dependencyProviderType}, injectionProvider.getDependencyTypes().toArray());
+                assertArrayEquals(new Context.Ref[]{Context.Ref.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
             }
 
             static class SubclassWithFieldInjection extends ComponentWithFieldInjection {
@@ -251,7 +251,7 @@ class InjectionTest {
             @Test
             public void should_include_method_dependency_info() {
                 InjectionProvider<ComponentWithMethodInjection> injectionProvider = new InjectionProvider<>(ComponentWithMethodInjection.class);
-                assertArrayEquals(new Class<?>[]{Dependency.class}, injectionProvider.getDependencyTypes().toArray());
+                assertArrayEquals(new Context.Ref[]{Context.Ref.of(Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
             }
 
             static class SuperClassWithInjectMethod {
@@ -323,7 +323,7 @@ class InjectionTest {
             @Test
             public void should_include_method_inject_dependency_types_info() {
                 InjectionProvider<ComponentWithMethodProviderInjection> injectionProvider = new InjectionProvider<>(ComponentWithMethodProviderInjection.class);
-                assertArrayEquals(new Type[]{dependencyProviderType}, injectionProvider.getDependencyTypes().toArray());
+                assertArrayEquals(new Context.Ref[]{Context.Ref.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
             }
         }
 

@@ -10,8 +10,6 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 
-import static java.util.stream.Stream.concat;
-
 class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     private final Constructor<T> constructor;
     private List<Field> fields;
@@ -46,9 +44,9 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     }
 
     @Override
-    public List<Type> getDependencyTypes() {
-        return concat(concat(Arrays.stream(constructor.getParameters()).map(Parameter::getParameterizedType), fields.stream().map(Field::getGenericType)),
-                methods.stream().flatMap(m -> Arrays.stream(m.getParameters()).map(Parameter::getParameterizedType))).toList();
+    public List<Context.Ref> getDependencyRefs() {
+        return Stream.concat(Stream.concat(Arrays.stream(constructor.getParameters()).map(Parameter::getParameterizedType), fields.stream().map(Field::getGenericType)),
+                methods.stream().flatMap(m -> Arrays.stream(m.getParameters()).map(Parameter::getParameterizedType))).map(Context.Ref::of).toList();
     }
 
     private static <T> List<Method> getInjectMethodList(Class<T> component) {
@@ -126,7 +124,7 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     }
 
     private static Object toDependency(Context context, Type type) {
-        return context.getType(type).get();
+        return context.getType(Context.Ref.of(type)).get();
     }
 
     private static <T> List<T> traverse(Class<?> component, BiFunction<Class<?>, List<T>, List<T>> toInjections) {

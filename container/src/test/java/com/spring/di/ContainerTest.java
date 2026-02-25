@@ -35,7 +35,8 @@ public class ContainerTest {
             };
             config.bind(Component.class, component);
 
-            Component instance = (Component) config.getContext().getType(Component.class).get();
+            Context context = config.getContext();
+            Component instance = context.getType(Context.Ref.of(Component.class)).get();
             Assertions.assertSame(component, instance);
         }
 
@@ -46,7 +47,8 @@ public class ContainerTest {
             config.bind(Dependency.class, dependency);
             config.bind(Component.class, componentClass);
 
-            Optional<Component> component = config.getContext().getType(Component.class);
+            Context context = config.getContext();
+            Optional<Component> component = context.getType(Context.Ref.of(Component.class));
             assertTrue(component.isPresent());
             assertSame(dependency, component.get().getDependency());
         }
@@ -61,17 +63,17 @@ public class ContainerTest {
 
         @Test
         public void should_return_null_is_component_not_defined() {
-            Optional<Component> component = config.getContext().getType(Component.class);
+            Context context = config.getContext();
+            Optional<Component> component = context.getType(Context.Ref.of(Component.class));
             assertTrue(component.isEmpty());
         }
 
-        private Provider<Component> componentProvider;
         @Test
         public void should_retrieve_provided_component() throws Exception {
             Component component = new Component() {};
             config.bind(Component.class, component);
-            ParameterizedType componentProviderType = (ParameterizedType)TypeBinding.class.getDeclaredField("componentProvider").getGenericType();
-            Provider<Component> instance = (Provider<Component>)config.getContext().getType(componentProviderType).get();
+            Context context = config.getContext();
+            Provider<Component> instance = context.getType(new Context.Ref<Provider<Component>>(){}).get();
             assertSame(component, instance.get());
         }
 
@@ -81,7 +83,8 @@ public class ContainerTest {
             Component component = new Component() {};
             config.bind(Component.class, component);
             ParameterizedType componentProviderType = (ParameterizedType)TypeBinding.class.getDeclaredField("componentList").getGenericType();
-            assertFalse(config.getContext().getType(componentProviderType).isPresent());
+            Context context = config.getContext();
+            assertFalse(context.getType(Context.Ref.of(componentProviderType)).isPresent());
         }
 
 
@@ -211,7 +214,8 @@ public class ContainerTest {
         public void should_not_throw_exception_if_cyclic_dependency_provide_exist() {
             config.bind(Component.class, ComponentWithInjectionConstructor.class);
             config.bind(Dependency.class, DependencyDependedProvidedComponentWithConstructor.class);
-            assertTrue(config.getContext().getType(Component.class).isPresent());
+            Context context = config.getContext();
+            assertTrue(context.getType(Context.Ref.of(Component.class)).isPresent());
         }
     }
 }
