@@ -1,5 +1,8 @@
 package com.spring.di;
 
+import lombok.Getter;
+
+import java.lang.annotation.Annotation;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.Objects;
@@ -14,15 +17,26 @@ public interface Context {
             return new Ref<>(type);
         }
 
+        public static <ComponentType> Ref<ComponentType> of(Class<ComponentType> type, Annotation qualifier) {
+            return new Ref<>(type, qualifier);
+        }
+
         public static Ref of(Type type) {
             return new Ref(type);
         }
 
         private Type container;
         private Class<ComponentType> component;
+        @Getter
+        private Annotation qualifier;
 
         Ref(Type type) {
             init(type);
+        }
+
+        public Ref(Class<ComponentType> component, Annotation qualifier) {
+            this.component = component;
+            this.qualifier = qualifier;
         }
 
         Ref(Class<ComponentType> component) {

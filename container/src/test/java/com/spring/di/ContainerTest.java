@@ -10,11 +10,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.ParameterizedType;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -85,6 +83,79 @@ public class ContainerTest {
             ParameterizedType componentProviderType = (ParameterizedType)TypeBinding.class.getDeclaredField("componentList").getGenericType();
             Context context = config.getContext();
             assertFalse(context.getType(Context.Ref.of(componentProviderType)).isPresent());
+        }
+
+        @Nested
+        class WithQualifier {
+            static class NamedLiteral implements jakarta.inject.Named {
+
+                private String value;
+                NamedLiteral(String value) {
+                    this.value = value;
+                }
+                @Override
+                public String value() {
+                    return value;
+                }
+
+                @Override
+                public Class<? extends Annotation> annotationType() {
+                    return jakarta.inject.Named.class;
+                }
+
+                @Override
+                public boolean equals(Object o) {
+                    if (o == null || getClass() != o.getClass()) return false;
+                    NamedLiteral that = (NamedLiteral) o;
+                    return Objects.equals(value, that.value);
+                }
+
+                @Override
+                public int hashCode() {
+                    return Objects.hashCode(value);
+                }
+            }
+            @Test
+            public void should_bind_instance_by_qualifier() {
+                Component component = new Component() {
+                };
+                config.bind(Component.class, component, new NamedLiteral("chosenOne"));
+
+                Context context = config.getContext();
+                Component instance = context.getType(Context.Ref.of(Component.class, new NamedLiteral("chosenOne"))).get();
+                Assertions.assertSame(component, instance);
+            }
+
+            @Test
+            public void should_bind_type_by_qualifier() {
+                config.bind(Component.class, ComponentWithDefaultConstructor.class, new NamedLiteral("chosenOne"));
+                Context context = config.getContext();
+                Component instance = context.getType(Context.Ref.of(Component.class, new NamedLiteral("chosenOne"))).get();
+                Assertions.assertNotNull(instance);
+            }
+
+            @Test
+            public void should_bind_instance_by_multiple_qualifiers() {
+                Component component = new Component() {
+                };
+                config.bind(Component.class, component, new NamedLiteral("chosenOne"), new NamedLiteral("skyWalker"));
+
+                Context context = config.getContext();
+                Component chosenOne = context.getType(Context.Ref.of(Component.class, new NamedLiteral("chosenOne"))).get();
+                Component skyWalker = context.getType(Context.Ref.of(Component.class, new NamedLiteral("skyWalker"))).get();
+                Assertions.assertSame(component, chosenOne);
+                Assertions.assertSame(component, skyWalker);
+            }
+
+            @Test
+            public void should_bind_type_by_multiple_qualifiers() {
+                config.bind(Component.class, ComponentWithDefaultConstructor.class, new NamedLiteral("chosenOne"), new NamedLiteral("skyWalker"));
+                Context context = config.getContext();
+                Component chosenOne = context.getType(Context.Ref.of(Component.class, new NamedLiteral("chosenOne"))).get();
+                Component skyWalker = context.getType(Context.Ref.of(Component.class, new NamedLiteral("skyWalker"))).get();
+                Assertions.assertNotNull(chosenOne);
+                Assertions.assertNotNull(skyWalker);
+            }
         }
 
 

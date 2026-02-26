@@ -4,19 +4,36 @@ import com.spring.di.exception.CyclicDependencyFoundException;
 import com.spring.di.exception.DependencyNotFoundException;
 import jakarta.inject.Provider;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.*;
 
 public class ContextConfig {
 
     private final Map<Class<?>, ComponentProvider<?>> providers = new HashMap<>();
+    private final Map<Component, ComponentProvider<?>> components = new HashMap<>();
 
     public <ComponentType> void bind(Class<ComponentType> componentClass, ComponentType component) {
         providers.put(componentClass, context -> component);
     }
 
+    record Component(Class<?> componentClass, Annotation qualifier) {
+
+    }
+
+    public <ComponentType> void bind(Class<ComponentType> componentClass, ComponentType component, Annotation... qualifiers) {
+        for (Annotation qualifier : qualifiers) {
+            components.put(new Component(componentClass, qualifier), context -> component);
+        }
+    }
+
     public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass) {
         providers.put(componentClass, new InjectionProvider<>(componentImplClass));
+    }
+
+    public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass,  Annotation... qualifiers) {
+        for (Annotation qualifier : qualifiers)
+            components.put(new Component(componentClass, qualifier), new InjectionProvider<>(componentImplClass));
     }
 
     public Context getContext() {
@@ -24,6 +41,9 @@ public class ContextConfig {
         return new Context() {
             @Override
             public Optional getType(Ref ref) {
+                if (ref.getQualifier() != null) {
+                    return Optional.ofNullable(components.get(new Component(ref.getComponent(), ref.getQualifier()))).map(p -> p.get(this));
+                }
                 if (ref.isContainer()) {
                     return getContainer(ref);
                 }
