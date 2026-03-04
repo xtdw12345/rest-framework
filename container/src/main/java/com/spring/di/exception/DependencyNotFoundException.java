@@ -1,21 +1,22 @@
 package com.spring.di.exception;
 
+import com.spring.di.Component;
+
 public class DependencyNotFoundException extends RuntimeException {
-    private Class<?> component;
-    private Class<?> dependency;
-    public DependencyNotFoundException(Class<?> dependency) {
-        this.dependency = dependency;
-    }
-    public DependencyNotFoundException(Class<?> component, Class<?> dependency) {
+
+    private Component component;
+    private Component dependency;
+
+    public DependencyNotFoundException(Component component, Component dependency) {
         this.component = component;
         this.dependency = dependency;
     }
 
-    public Class<?> getDependency() {
+    public Component getDependency() {
         return dependency;
     }
 
-    public Class<?> getComponent() {
+    public Component getComponent() {
         return component;
     }
 }

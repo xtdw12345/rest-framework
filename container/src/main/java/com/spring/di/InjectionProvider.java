@@ -2,7 +2,9 @@ package com.spring.di;
 
 import com.spring.di.exception.IllegalComponentException;
 import jakarta.inject.Inject;
+import jakarta.inject.Qualifier;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,6 +16,7 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     private final Constructor<T> constructor;
     private List<Field> fields;
     private List<Method> methods;
+    private List<ComponentRef> dependencies;
 
     public InjectionProvider(Class<T> implementation) {
         checkImplementation(implementation);
@@ -24,6 +27,7 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
 
         checkFields(this.fields);
         checkMethods(this.methods);
+        dependencies = getDependencyRefs();
     }
 
     @Override
@@ -44,9 +48,26 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     }
 
     @Override
-    public List<Context.Ref> getDependencyRefs() {
-        return Stream.concat(Stream.concat(Arrays.stream(constructor.getParameters()).map(Parameter::getParameterizedType), fields.stream().map(Field::getGenericType)),
-                methods.stream().flatMap(m -> Arrays.stream(m.getParameters()).map(Parameter::getParameterizedType))).map(Context.Ref::of).toList();
+    public List<ComponentRef> getDependencyRefs() {
+        return Stream.concat(Stream.concat(Arrays.stream(constructor.getParameters()).map(InjectionProvider::toComponentRef),
+                        fields.stream().map(InjectionProvider::toComponentRef)),
+                methods.stream().flatMap(m -> Arrays.stream(m.getParameters()).map(InjectionProvider::toComponentRef))).toList();
+    }
+
+    private static ComponentRef toComponentRef(Field f) {
+        return ComponentRef.of(f.getGenericType(), getQualifier(f));
+    }
+
+    private static ComponentRef toComponentRef(Parameter p) {
+        return ComponentRef.of(p.getParameterizedType(), getQualifier(p));
+    }
+
+    private static Annotation getQualifier(AnnotatedElement element) {
+        List<Annotation> annotations = Arrays.stream(element.getAnnotations()).filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class)).toList();
+        if (annotations.size() > 1) {
+            throw new IllegalComponentException();
+        }
+        return annotations.stream().findFirst().orElse(null);
     }
 
     private static <T> List<Method> getInjectMethodList(Class<T> component) {
@@ -116,15 +137,19 @@ class InjectionProvider<T> implements ContextConfig.ComponentProvider<T> {
     }
 
     private static Object toDependency(Context context, Field field) {
-        return toDependency(context, field.getGenericType());
+        return toDependency(context, field.getGenericType(), getQualifier(field));
     }
 
     private static Object[] toDependencies(Context context, Executable executable) {
-        return Arrays.stream(executable.getParameters()).map(p -> toDependency(context, p.getParameterizedType())).toArray();
+        return Arrays.stream(executable.getParameters()).map(p -> getDependency(context, p)).toArray();
     }
 
-    private static Object toDependency(Context context, Type type) {
-        return context.getType(Context.Ref.of(type)).get();
+    private static Object getDependency(Context context, Parameter p) {
+        return toDependency(context, p.getParameterizedType(), getQualifier(p));
+    }
+
+    private static Object toDependency(Context context, Type type, Annotation qualifier) {
+        return context.getType(ComponentRef.of(type, qualifier)).get();
     }
 
     private static <T> List<T> traverse(Class<?> component, BiFunction<Class<?>, List<T>, List<T>> toInjections) {

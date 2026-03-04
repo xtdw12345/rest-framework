@@ -2,7 +2,9 @@ package com.spring.di;
 
 import com.spring.di.exception.CyclicDependencyFoundException;
 import com.spring.di.exception.DependencyNotFoundException;
+import com.spring.di.exception.IllegalComponentException;
 import jakarta.inject.Provider;
+import jakarta.inject.Qualifier;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
@@ -10,39 +12,41 @@ import java.util.*;
 
 public class ContextConfig {
 
-    private final Map<Class<?>, ComponentProvider<?>> providers = new HashMap<>();
     private final Map<Component, ComponentProvider<?>> components = new HashMap<>();
 
-    public <ComponentType> void bind(Class<ComponentType> componentClass, ComponentType component) {
-        providers.put(componentClass, context -> component);
-    }
-
-    record Component(Class<?> componentClass, Annotation qualifier) {
-
+    public <ComponentType> void bind(Class<ComponentType> componentType, ComponentType component) {
+        components.put(new Component(componentType, null),  context -> component);
     }
 
     public <ComponentType> void bind(Class<ComponentType> componentClass, ComponentType component, Annotation... qualifiers) {
         for (Annotation qualifier : qualifiers) {
+            if (!qualifier.annotationType().isAnnotationPresent(Qualifier.class)) {
+                throw new IllegalComponentException();
+            }
             components.put(new Component(componentClass, qualifier), context -> component);
         }
     }
 
-    public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass) {
-        providers.put(componentClass, new InjectionProvider<>(componentImplClass));
+    public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentType, Class<ComponentImplTpe> componentImplClass) {
+        components.put(new Component(componentType, null), new InjectionProvider<>(componentImplClass));
     }
 
     public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass,  Annotation... qualifiers) {
-        for (Annotation qualifier : qualifiers)
+        for (Annotation qualifier : qualifiers){
+            if (!qualifier.annotationType().isAnnotationPresent(Qualifier.class)) {
+                throw new IllegalComponentException();
+            }
             components.put(new Component(componentClass, qualifier), new InjectionProvider<>(componentImplClass));
+        }
     }
 
     public Context getContext() {
-        providers.keySet().forEach(component -> checkDependencies(component, new Stack<>()));
+        components.keySet().forEach(component -> checkDependencies(component, new Stack<>()));
         return new Context() {
             @Override
-            public Optional getType(Ref ref) {
-                if (ref.getQualifier() != null) {
-                    return Optional.ofNullable(components.get(new Component(ref.getComponent(), ref.getQualifier()))).map(p -> p.get(this));
+            public Optional getType(ComponentRef ref) {
+                if (ref.component().qualifier() != null) {
+                    return Optional.ofNullable(components.get(ref.component())).map(p -> p.get(this));
                 }
                 if (ref.isContainer()) {
                     return getContainer(ref);
@@ -50,34 +54,31 @@ public class ContextConfig {
                 return getComponent(ref);
             }
 
-            private Optional getComponent(Ref ref) {
-                Class<?> component = ref.getComponent();
-                return Optional.ofNullable(providers.get(component)).map(p -> p.get(this));
+            private Optional getComponent(ComponentRef ref) {
+                return Optional.ofNullable(components.get(ref.component())).map(p -> p.get(this));
             }
 
-            private Optional getContainer(Ref ref) {
+            private Optional getContainer(ComponentRef ref) {
                 Type container = ref.getContainer();
-                Class<?> component = ref.getComponent();
-
                 if (container != Provider.class) {
                     return Optional.empty();
                 }
-                return Optional.ofNullable(providers.get(component)).map(p -> (Provider<Object>) () -> p.get(this));
+                return Optional.ofNullable(components.get(ref.component())).map(p -> (Provider<Object>) () -> p.get(this));
             }
         };
     }
 
-    private void checkDependencies(Class<?> component, Stack<Class<?>> visiting) {
-        for (Context.Ref dependency : providers.get(component).getDependencyRefs()) {
-            if (!providers.containsKey(dependency.getComponent())) {
-                throw new DependencyNotFoundException(component, dependency.getComponent());
+    private void checkDependencies(Component component, Stack<Component> visiting) {
+        for (ComponentRef dependency : components.get(component).getDependencyRefs()) {
+            if (!components.containsKey(dependency.component())) {
+                throw new DependencyNotFoundException(component, dependency.component());
             }
             if (!dependency.isContainer()){
-                if (visiting.contains(dependency.getComponent())) {
+                if (visiting.contains(dependency.component())) {
                     throw new CyclicDependencyFoundException(new HashSet<>(visiting));
                 }
-                visiting.push(dependency.getComponent());
-                checkDependencies(dependency.getComponent(), visiting);
+                visiting.push(dependency.component());
+                checkDependencies(new Component(dependency.component().componentType(), dependency.component().qualifier()), visiting);
                 visiting.pop();
             }
         }
@@ -86,7 +87,7 @@ public class ContextConfig {
     interface ComponentProvider<T> {
         T get(Context context);
 
-        default List<Context.Ref> getDependencyRefs() {
+        default List<ComponentRef> getDependencyRefs() {
             return List.of();
         }
     }

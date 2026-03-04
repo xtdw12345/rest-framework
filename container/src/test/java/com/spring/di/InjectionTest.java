@@ -2,6 +2,7 @@ package com.spring.di;
 
 import com.spring.di.exception.IllegalComponentException;
 import jakarta.inject.Inject;
+import jakarta.inject.Named;
 import jakarta.inject.Provider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -19,18 +20,18 @@ import static org.mockito.Mockito.when;
 class InjectionTest {
     private ContextConfig config = Mockito.mock(ContextConfig.class);
     private Context context = Mockito.mock(Context.class);
-    private Dependency dependency = new Dependency() {
+    private ContainerTest.Dependency dependency = new ContainerTest.Dependency() {
     };
-    private Provider<Dependency> dependencyProvider = Mockito.mock(Provider.class);
+    private Provider<ContainerTest.Dependency> dependencyProvider = Mockito.mock(Provider.class);
     private Type dependencyProviderType;
 
     @BeforeEach
     public void setUp() throws NoSuchFieldException {
         when(config.getContext()).thenReturn(context);
-        config.bind(Dependency.class, dependency);
-        when(context.getType(eq(Context.Ref.of(Dependency.class)))).thenReturn(Optional.of(dependency));
+        config.bind(ContainerTest.Dependency.class, dependency);
+        when(context.getType(eq(ComponentRef.of(ContainerTest.Dependency.class)))).thenReturn(Optional.of(dependency));
         dependencyProviderType = InjectionTest.class.getDeclaredField("dependencyProvider").getGenericType();
-        when(context.getType(eq(Context.Ref.of(dependencyProviderType)))).thenReturn(Optional.of(dependencyProvider));
+        when(context.getType(eq(ComponentRef.of(dependencyProviderType)))).thenReturn(Optional.of(dependencyProvider));
     }
 
     private <T, R extends T> T getComponent(Class<T> componentClass, Class<R> componentImplClass) {
@@ -44,35 +45,35 @@ class InjectionTest {
         class InjectTest {
             @Test
             public void should_bind_type_to_a_class_with_default_constructor() {
-                Component instance = getComponent(Component.class, ComponentWithDefaultConstructor.class);
+                ContainerTest.TestComponent instance = getComponent(ContainerTest.TestComponent.class, ContainerTest.ComponentWithDefaultConstructor.class);
                 assertNotNull(instance);
-                assertInstanceOf(ComponentWithDefaultConstructor.class, instance);
+                assertInstanceOf(ContainerTest.ComponentWithDefaultConstructor.class, instance);
             }
 
             @Test
             public void should_bind_type_to_a_class_with_injection_constructor() {
 
-                Component instance = getComponent(Component.class, ComponentWithInjectionConstructor.class);
+                ContainerTest.TestComponent instance = getComponent(ContainerTest.TestComponent.class, ContainerTest.ComponentWithInjectionConstructor.class);
                 assertNotNull(instance);
-                assertInstanceOf(ComponentWithInjectionConstructor.class, instance);
-                assertSame(dependency, ((ComponentWithInjectionConstructor) instance).dependency);
+                assertInstanceOf(ContainerTest.ComponentWithInjectionConstructor.class, instance);
+                assertSame(dependency, ((ContainerTest.ComponentWithInjectionConstructor) instance).dependency);
             }
 
             @Test
             public void should_bind_type_to_a_class_with_nested_injection_constructor() {
-                when(context.getType(Context.Ref.of(Dependency.class))).thenReturn(Optional.of(new DependencyWithInjectionConstructor("Hello World!")));
-                Component instance = getComponent(Component.class, ComponentWithInjectionConstructor.class);
+                when(context.getType(ComponentRef.of(ContainerTest.Dependency.class))).thenReturn(Optional.of(new ContainerTest.DependencyWithInjectionConstructor("Hello World!")));
+                ContainerTest.TestComponent instance = getComponent(ContainerTest.TestComponent.class, ContainerTest.ComponentWithInjectionConstructor.class);
 
                 assertNotNull(instance);
-                assertInstanceOf(ComponentWithInjectionConstructor.class, instance);
-                assertInstanceOf(DependencyWithInjectionConstructor.class, ((ComponentWithInjectionConstructor) instance).dependency);
-                assertEquals("Hello World!", ((DependencyWithInjectionConstructor) ((ComponentWithInjectionConstructor) instance).dependency).value);
+                assertInstanceOf(ContainerTest.ComponentWithInjectionConstructor.class, instance);
+                assertInstanceOf(ContainerTest.DependencyWithInjectionConstructor.class, ((ContainerTest.ComponentWithInjectionConstructor) instance).dependency);
+                assertEquals("Hello World!", ((ContainerTest.DependencyWithInjectionConstructor) ((ContainerTest.ComponentWithInjectionConstructor) instance).dependency).value);
             }
 
             static class ConstructorProviderInjection {
-                Provider<Dependency>  dependencyProvider;
+                Provider<ContainerTest.Dependency>  dependencyProvider;
                 @Inject
-                ConstructorProviderInjection(Provider<Dependency> dependencyProvider) {
+                ConstructorProviderInjection(Provider<ContainerTest.Dependency> dependencyProvider) {
                     this.dependencyProvider = dependencyProvider;
                 }
             }
@@ -84,9 +85,9 @@ class InjectionTest {
             }
 
             static class ComponentWithConstructorInjection {
-                Dependency dependency;
+                ContainerTest.Dependency dependency;
                 @Inject
-                ComponentWithConstructorInjection(Dependency dependency) {
+                ComponentWithConstructorInjection(ContainerTest.Dependency dependency) {
                     this.dependency = dependency;
                 }
             }
@@ -94,30 +95,74 @@ class InjectionTest {
             @Test
             public void should_include_constructor_inject_dependencies_info() {
                 InjectionProvider<ComponentWithConstructorInjection> injectionProvider = new InjectionProvider<>(ComponentWithConstructorInjection.class);
-                assertArrayEquals(new Context.Ref[]{Context.Ref.of(Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
+                assertArrayEquals(new ComponentRef[]{ComponentRef.of(ContainerTest.Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
             }
 
             static class ComponentWithConstructorProviderInjection {
-                Provider<Dependency> dependency;
+                Provider<ContainerTest.Dependency> dependency;
                 @Inject
-                ComponentWithConstructorProviderInjection(Provider<Dependency> dependency) {
+                ComponentWithConstructorProviderInjection(Provider<ContainerTest.Dependency> dependency) {
                     this.dependency = dependency;
                 }
             }
             @Test
             public void should_include_constructor_inject_dependency_types_info() {
                 InjectionProvider<ComponentWithConstructorProviderInjection> injectionProvider = new InjectionProvider<>(ComponentWithConstructorProviderInjection.class);
-                assertArrayEquals(new Context.Ref[]{Context.Ref.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
+                assertArrayEquals(new ComponentRef[]{ComponentRef.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
+            }
+
+            @Nested
+            class WithQualifier {
+
+                @BeforeEach
+                public void setUp() {
+                    Mockito.reset(context);
+                    when(context.getType(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
+                }
+
+                static class InjectConstructor {
+                    ContainerTest.Dependency dependency;
+                    @Inject
+                    InjectConstructor(@Named("chosenOne") ContainerTest.Dependency dependency) {
+                        this.dependency = dependency;
+                    }
+                }
+
+                @Test
+                public void should_inject_dependency_with_qualifier_via_constructor() {
+                    InjectionProvider<InjectConstructor> injectionProvider = new InjectionProvider<>(InjectConstructor.class);
+                    InjectConstructor component = injectionProvider.get(context);
+                    assertSame(dependency, component.dependency);
+                }
+
+                @Test
+                public void should_include_dependency_with_qualifier() {
+                    InjectionProvider<InjectConstructor> injectionProvider = new InjectionProvider<>(InjectConstructor.class);
+                    assertArrayEquals(new ComponentRef[]{ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))}, injectionProvider.getDependencyRefs().toArray());
+                }
+
+                static class InjectConstructorWithMultiQualifiers {
+                    ContainerTest.Dependency dependency;
+                    @Inject
+                    InjectConstructorWithMultiQualifiers(@Named("chosenOne") @ContainerTest.TypeBinding.WithQualifier.SkyWalker ContainerTest.Dependency dependency) {
+                        this.dependency = dependency;
+                    }
+                }
+
+                @Test
+                public void should_throw_exception_if_multi_qualifiers_given() {
+                    assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(InjectConstructorWithMultiQualifiers.class));
+                }
             }
         }
 
         @Nested
         class IllegalConstructor {
             abstract class AbstractComponentWithInjectConstructor {
-                Dependency dependency;
+                ContainerTest.Dependency dependency;
 
                 @Inject
-                AbstractComponentWithInjectConstructor(Dependency dependency) {
+                AbstractComponentWithInjectConstructor(ContainerTest.Dependency dependency) {
                     this.dependency = dependency;
                 }
             }
@@ -129,18 +174,18 @@ class InjectionTest {
 
             @Test
             public void should_throw_exception_if_bind_interface_class_as_component() {
-                assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(Component.class));
+                assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(ContainerTest.TestComponent.class));
             }
 
             @Test
             public void should_throw_illegal_exception_if_multi_inject_constructors_exist() {
-                assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(ComponentWithMultiInjectConstructors.class));
+                assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(ContainerTest.ComponentWithMultiInjectConstructors.class));
 
             }
 
             @Test
             public void should_throw_illegal_exception_if_no_inject_constructor_nor_default_constructor_exists() {
-                assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(ComponentWithNoInjectConstructorNorDefaultConstructor.class));
+                assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(ContainerTest.ComponentWithNoInjectConstructorNorDefaultConstructor.class));
             }
         }
     }
@@ -150,31 +195,31 @@ class InjectionTest {
 
         @Nested
         class InjectTest {
-            static class ComponentWithFieldInjection implements Component {
+            static class ComponentWithFieldInjection implements ContainerTest.TestComponent {
                 @Inject
-                Dependency dependency;
+                ContainerTest.Dependency dependency;
             }
 
             @Test
             public void should_inject_via_field() {
-                Component component = getComponent(Component.class, ComponentWithFieldInjection.class);
+                ContainerTest.TestComponent component = getComponent(ContainerTest.TestComponent.class, ComponentWithFieldInjection.class);
                 assertSame(dependency, ((ComponentWithFieldInjection) component).dependency);
             }
 
             @Test
             public void should_include_field_inject_dependencies_info() {
                 InjectionProvider<ComponentWithFieldInjection> injectionProvider = new InjectionProvider<>(ComponentWithFieldInjection.class);
-                assertArrayEquals(new Context.Ref[]{Context.Ref.of(Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
+                assertArrayEquals(new ComponentRef[]{ComponentRef.of(ContainerTest.Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
             }
 
             static class ComponentWithFieldProviderInjection {
                 @Inject
-                Provider<Dependency> dependency;
+                Provider<ContainerTest.Dependency> dependency;
             }
             @Test
             public void should_include_field_inject_dependency_types_info() {
                 InjectionProvider<ComponentWithFieldProviderInjection> injectionProvider = new InjectionProvider<>(ComponentWithFieldProviderInjection.class);
-                assertArrayEquals(new Context.Ref[]{Context.Ref.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
+                assertArrayEquals(new ComponentRef[]{ComponentRef.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
             }
 
             static class SubclassWithFieldInjection extends ComponentWithFieldInjection {
@@ -182,26 +227,64 @@ class InjectionTest {
 
             @Test
             public void should_inject_via_superclass() {
-                Component component = getComponent(Component.class, SubclassWithFieldInjection.class);
+                ContainerTest.TestComponent component = getComponent(ContainerTest.TestComponent.class, SubclassWithFieldInjection.class);
                 assertSame(dependency, ((SubclassWithFieldInjection) component).dependency);
             }
 
             static class ProviderInjectByField {
                 @Inject
-                Provider<Dependency> dependency;
+                Provider<ContainerTest.Dependency> dependency;
             }
             @Test
             public void should_inject_provider_via_inject_field() {
                 InjectionProvider<ProviderInjectByField> component = new InjectionProvider<>(ProviderInjectByField.class);
                 assertSame(dependencyProvider, component.get(context).dependency);
             }
+            @Nested
+            class WithQualifier {
+
+                @BeforeEach
+                public void setUp() {
+                    Mockito.reset(context);
+                    when(context.getType(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
+                }
+
+                static class InjectField {
+                    @Inject
+                    @Named("chosenOne") ContainerTest.Dependency dependency;
+                }
+
+                @Test
+                public void should_inject_dependency_with_qualifier_via_constructor() {
+                    InjectionProvider<InjectField> injectionProvider = new InjectionProvider<>(InjectField.class);
+                    InjectField component = injectionProvider.get(context);
+                    assertSame(dependency, component.dependency);
+                }
+
+                @Test
+                public void should_include_dependency_with_qualifier_via_method() {
+                    InjectionProvider<InjectField> injectionProvider = new InjectionProvider<>(InjectField.class);
+                    assertArrayEquals(new ComponentRef[]{ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))}, injectionProvider.getDependencyRefs().toArray());
+                }
+
+                static class InjectFieldWithMultiQualifiers {
+                    @Inject
+                    @Named("chosenOne") @ContainerTest.TypeBinding.WithQualifier.SkyWalker
+                    ContainerTest.Dependency dependency;
+                }
+
+                @Test
+                public void should_throw_exception_if_multi_qualifiers_given() {
+                    assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(InjectFieldWithMultiQualifiers.class));
+                }
+            }
         }
 
         @Nested
         class IllegalFields {
-            class ComponentWithFinalFieldInjection implements Component {
+            class ComponentWithFinalFieldInjection implements ContainerTest.TestComponent {
                 @Inject
-                final Dependency dependency = null;
+                final ContainerTest.Dependency dependency = null;
             }
 
             @Test
@@ -217,16 +300,16 @@ class InjectionTest {
         @Nested
         class InjectTest {
 
-            static class ComponentWithMethodInjection implements Component {
-                Dependency dependency;
+            static class ComponentWithMethodInjection implements ContainerTest.TestComponent {
+                ContainerTest.Dependency dependency;
 
                 @Inject
-                public void install(Dependency dependency) {
+                public void install(ContainerTest.Dependency dependency) {
                     this.dependency = dependency;
                 }
             }
 
-            static class ComponentWithInjectMethodButNoDependencyDeclared implements Component {
+            static class ComponentWithInjectMethodButNoDependencyDeclared implements ContainerTest.TestComponent {
                 boolean called = false;
 
                 @Inject
@@ -237,21 +320,21 @@ class InjectionTest {
 
             @Test
             public void should_call_inject_method_if_no_dependency_declared() {
-                Component component = getComponent(Component.class, ComponentWithInjectMethodButNoDependencyDeclared.class);
+                ContainerTest.TestComponent component = getComponent(ContainerTest.TestComponent.class, ComponentWithInjectMethodButNoDependencyDeclared.class);
 
                 assertTrue(((ComponentWithInjectMethodButNoDependencyDeclared) component).called);
             }
 
             @Test
             public void should_inject_via_inject_method() {
-                Component component = getComponent(Component.class, ComponentWithMethodInjection.class);
+                ContainerTest.TestComponent component = getComponent(ContainerTest.TestComponent.class, ComponentWithMethodInjection.class);
                 assertSame(dependency, ((ComponentWithMethodInjection) component).dependency);
             }
 
             @Test
             public void should_include_method_dependency_info() {
                 InjectionProvider<ComponentWithMethodInjection> injectionProvider = new InjectionProvider<>(ComponentWithMethodInjection.class);
-                assertArrayEquals(new Context.Ref[]{Context.Ref.of(Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
+                assertArrayEquals(new ComponentRef[]{ComponentRef.of(ContainerTest.Dependency.class)}, injectionProvider.getDependencyRefs().toArray());
             }
 
             static class SuperClassWithInjectMethod {
@@ -299,10 +382,10 @@ class InjectionTest {
             }
 
             static class ProviderInjectionWithMethod {
-                Provider<Dependency> dependency;
+                Provider<ContainerTest.Dependency> dependency;
 
                 @Inject
-                public void install(Provider<Dependency> dependency) {
+                public void install(Provider<ContainerTest.Dependency> dependency) {
                     this.dependency = dependency;
                 }
             }
@@ -313,9 +396,9 @@ class InjectionTest {
             }
 
             static class ComponentWithMethodProviderInjection {
-                Provider<Dependency> dependency;
+                Provider<ContainerTest.Dependency> dependency;
                 @Inject
-                public void install(Provider<Dependency> dependency) {
+                public void install(Provider<ContainerTest.Dependency> dependency) {
                     this.dependency = dependency;
                 }
 
@@ -323,7 +406,50 @@ class InjectionTest {
             @Test
             public void should_include_method_inject_dependency_types_info() {
                 InjectionProvider<ComponentWithMethodProviderInjection> injectionProvider = new InjectionProvider<>(ComponentWithMethodProviderInjection.class);
-                assertArrayEquals(new Context.Ref[]{Context.Ref.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
+                assertArrayEquals(new ComponentRef[]{ComponentRef.of(dependencyProviderType)}, injectionProvider.getDependencyRefs().toArray());
+            }
+
+            @Nested
+            class WithQualifier {
+
+            @BeforeEach
+            public void setUp() {
+                Mockito.reset(context);
+                when(context.getType(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
+            }
+
+                static class InjectMethod {
+                    ContainerTest.Dependency dependency;
+                    @Inject
+                    void install(@Named("chosenOne") ContainerTest.Dependency dependency) {
+                        this.dependency = dependency;
+                    }
+                }
+
+                @Test
+                public void should_inject_dependency_with_qualifier_via_method() {
+                    InjectionProvider<InjectMethod> injectionProvider = new InjectionProvider<>(InjectMethod.class);
+                    InjectMethod component = injectionProvider.get(context);
+                    assertSame(dependency, component.dependency);
+                }
+
+                @Test
+                public void should_include_dependency_with_qualifier_via_method() {
+                    InjectionProvider<InjectMethod> injectionProvider = new InjectionProvider<>(InjectMethod.class);
+                    assertArrayEquals(new ComponentRef[]{ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))}, injectionProvider.getDependencyRefs().toArray());
+                }
+
+                static class InjectMethodWithMultiQualifiers {
+                    @Inject
+                    void install (@Named("chosenOne") @ContainerTest.TypeBinding.WithQualifier.SkyWalker ContainerTest.Dependency dependency) {
+
+                    }
+                }
+
+                @Test
+                public void should_throw_exception_if_multi_qualifiers_given() {
+                    assertThrows(IllegalComponentException.class, () -> new InjectionProvider<>(InjectMethodWithMultiQualifiers.class));
+                }
             }
         }
 
