@@ -87,7 +87,7 @@ public class ContextConfig {
     interface ComponentProvider<T> {
         T get(Context context);
 
-        default List<ComponentRef> getDependencyRefs() {
+        default List<ComponentRef<?>> getDependencyRefs() {
             return List.of();
         }
     }
