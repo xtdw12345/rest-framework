@@ -29,9 +29,9 @@ class InjectionTest {
     public void setUp() throws NoSuchFieldException {
         when(config.getContext()).thenReturn(context);
         config.bind(ContainerTest.Dependency.class, dependency);
-        when(context.getType(eq(ComponentRef.of(ContainerTest.Dependency.class)))).thenReturn(Optional.of(dependency));
+        when(context.get(eq(ComponentRef.of(ContainerTest.Dependency.class)))).thenReturn(Optional.of(dependency));
         dependencyProviderType = InjectionTest.class.getDeclaredField("dependencyProvider").getGenericType();
-        when(context.getType(eq(ComponentRef.of(dependencyProviderType)))).thenReturn(Optional.of(dependencyProvider));
+        when(context.get(eq(ComponentRef.of(dependencyProviderType)))).thenReturn(Optional.of(dependencyProvider));
     }
 
     private <T, R extends T> T getComponent(Class<T> componentClass, Class<R> componentImplClass) {
@@ -61,7 +61,7 @@ class InjectionTest {
 
             @Test
             public void should_bind_type_to_a_class_with_nested_injection_constructor() {
-                when(context.getType(ComponentRef.of(ContainerTest.Dependency.class))).thenReturn(Optional.of(new ContainerTest.DependencyWithInjectionConstructor("Hello World!")));
+                when(context.get(ComponentRef.of(ContainerTest.Dependency.class))).thenReturn(Optional.of(new ContainerTest.DependencyWithInjectionConstructor("Hello World!")));
                 ContainerTest.TestComponent instance = getComponent(ContainerTest.TestComponent.class, ContainerTest.ComponentWithInjectionConstructor.class);
 
                 assertNotNull(instance);
@@ -117,7 +117,7 @@ class InjectionTest {
                 @BeforeEach
                 public void setUp() {
                     Mockito.reset(context);
-                    when(context.getType(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
+                    when(context.get(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
                 }
 
                 static class InjectConstructor {
@@ -246,7 +246,7 @@ class InjectionTest {
                 @BeforeEach
                 public void setUp() {
                     Mockito.reset(context);
-                    when(context.getType(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
+                    when(context.get(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
                 }
 
                 static class InjectField {
@@ -415,7 +415,7 @@ class InjectionTest {
             @BeforeEach
             public void setUp() {
                 Mockito.reset(context);
-                when(context.getType(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
+                when(context.get(eq(ComponentRef.of(ContainerTest.Dependency.class, new ContainerTest.TypeBinding.WithQualifier.NamedLiteral("chosenOne"))))).thenReturn(Optional.of(dependency));
             }
 
                 static class InjectMethod {

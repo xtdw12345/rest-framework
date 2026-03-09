@@ -5,14 +5,20 @@ import com.spring.di.exception.DependencyNotFoundException;
 import com.spring.di.exception.IllegalComponentException;
 import jakarta.inject.Inject;
 import jakarta.inject.Provider;
+import jakarta.inject.Scope;
+import jakarta.inject.Singleton;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Documented;
+import java.lang.annotation.Retention;
 import java.lang.reflect.ParameterizedType;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
@@ -35,7 +41,7 @@ public class ContainerTest {
             config.bind(TestComponent.class, component);
 
             Context context = config.getContext();
-            TestComponent instance = context.getType(ComponentRef.of(TestComponent.class)).get();
+            TestComponent instance = context.get(ComponentRef.of(TestComponent.class)).get();
             Assertions.assertSame(component, instance);
         }
 
@@ -47,7 +53,7 @@ public class ContainerTest {
             config.bind(TestComponent.class, componentClass);
 
             Context context = config.getContext();
-            Optional<TestComponent> component = context.getType(ComponentRef.of(TestComponent.class));
+            Optional<TestComponent> component = context.get(ComponentRef.of(TestComponent.class));
             assertTrue(component.isPresent());
             assertSame(dependency, component.get().getDependency());
         }
@@ -63,7 +69,7 @@ public class ContainerTest {
         @Test
         public void should_return_null_is_component_not_defined() {
             Context context = config.getContext();
-            Optional<TestComponent> component = context.getType(ComponentRef.of(TestComponent.class));
+            Optional<TestComponent> component = context.get(ComponentRef.of(TestComponent.class));
             assertTrue(component.isEmpty());
         }
 
@@ -72,7 +78,7 @@ public class ContainerTest {
             TestComponent component = new TestComponent() {};
             config.bind(TestComponent.class, component);
             Context context = config.getContext();
-            Provider<TestComponent> instance = context.getType(new ComponentRef<Provider<TestComponent>>(){}).get();
+            Provider<TestComponent> instance = context.get(new ComponentRef<Provider<TestComponent>>(){}).get();
             assertSame(component, instance.get());
         }
 
@@ -83,7 +89,7 @@ public class ContainerTest {
             config.bind(TestComponent.class, component);
             ParameterizedType componentProviderType = (ParameterizedType)TypeBinding.class.getDeclaredField("componentList").getGenericType();
             Context context = config.getContext();
-            assertFalse(context.getType(ComponentRef.of(componentProviderType)).isPresent());
+            assertFalse(context.get(ComponentRef.of(componentProviderType)).isPresent());
         }
 
         @Nested
@@ -140,8 +146,8 @@ public class ContainerTest {
                 config.bind(TestComponent.class, component, new NamedLiteral("chosenOne"), new SkyWalkerLiteral());
 
                 Context context = config.getContext();
-                TestComponent chosenOne = context.getType(ComponentRef.of(TestComponent.class, new NamedLiteral("chosenOne"))).get();
-                TestComponent skyWalker = context.getType(ComponentRef.of(TestComponent.class, new SkyWalkerLiteral())).get();
+                TestComponent chosenOne = context.get(ComponentRef.of(TestComponent.class, new NamedLiteral("chosenOne"))).get();
+                TestComponent skyWalker = context.get(ComponentRef.of(TestComponent.class, new SkyWalkerLiteral())).get();
                 Assertions.assertSame(component, chosenOne);
                 Assertions.assertSame(component, skyWalker);
             }
@@ -150,8 +156,8 @@ public class ContainerTest {
             public void should_bind_type_by_multiple_qualifiers() {
                 config.bind(TestComponent.class, ComponentWithDefaultConstructor.class, new NamedLiteral("chosenOne"), new SkyWalkerLiteral());
                 Context context = config.getContext();
-                TestComponent chosenOne = context.getType(ComponentRef.of(TestComponent.class, new NamedLiteral("chosenOne"))).get();
-                TestComponent skyWalker = context.getType(ComponentRef.of(TestComponent.class, new SkyWalkerLiteral())).get();
+                TestComponent chosenOne = context.get(ComponentRef.of(TestComponent.class, new NamedLiteral("chosenOne"))).get();
+                TestComponent skyWalker = context.get(ComponentRef.of(TestComponent.class, new SkyWalkerLiteral())).get();
                 Assertions.assertNotNull(chosenOne);
                 Assertions.assertNotNull(skyWalker);
             }
@@ -170,8 +176,106 @@ public class ContainerTest {
 
             }
         }
+    }
 
+    @Nested
+    class WithScope {
+        static class NotSingleton {
 
+        }
+        @Test
+        public void should_not_be_singleton_scope_by_default() {
+            config.bind(NotSingleton.class, NotSingleton.class);
+            Context context = config.getContext();
+            assertNotSame(context.get(ComponentRef.of(NotSingleton.class)).get(), context.get(ComponentRef.of(NotSingleton.class)).get());
+        }
+
+        @Test
+        public void should_bind_component_as_singleton() {
+            config.bind(NotSingleton.class, NotSingleton.class, new SingletonLiteral());
+            Context context = config.getContext();
+            assertSame(context.get(ComponentRef.of(NotSingleton.class)).get(), context.get(ComponentRef.of(NotSingleton.class)).get());
+        }
+
+        record SingletonLiteral() implements Singleton {
+
+            @Override
+            public Class<? extends Annotation> annotationType() {
+                return Singleton.class;
+            }
+        }
+
+        @Singleton
+        static class SingletonComponent implements TestComponent{
+
+        }
+
+        @Test
+        public void should_retrieve_singleton_scope_from_component() {
+            config.bind(SingletonComponent.class, SingletonComponent.class);
+            Context context = config.getContext();
+            assertSame(context.get(ComponentRef.of(SingletonComponent.class, null)).get(), context.get(ComponentRef.of(SingletonComponent.class, null)).get());
+        }
+
+        @Scope
+        @Documented
+        @Retention(RUNTIME)
+        @interface Pooled {}
+
+        @Pooled
+        static class PooledComponent implements TestComponent {
+
+        }
+
+        static class PooledProvider<T> implements ContextConfig.ComponentProvider<T> {
+            private static final int MAX = 2;
+            private int current = 0;
+            private List<T> instances = new ArrayList<>();
+            private ContextConfig.ComponentProvider<T> provider;
+
+            public PooledProvider(ContextConfig.ComponentProvider<T> provider) {
+                this.provider = provider;
+            }
+
+            @Override
+            public T get(Context context) {
+                if (instances.size() < MAX) {
+                    instances.add(provider.get(context));
+                }
+                return instances.get(current++ % MAX);
+            }
+
+            @Override
+            public List<ComponentRef<?>> getDependencyRefs() {
+                return provider.getDependencyRefs();
+            }
+        }
+
+        @Test
+        public void should_support_custom_scope() {
+            config.scope(Pooled.class, PooledProvider::new);
+            config.bind(PooledComponent.class, PooledComponent.class);
+            Context context = config.getContext();
+            Set<PooledComponent> instances = IntStream.range(1, 5).mapToObj(i -> context.get(ComponentRef.of(PooledComponent.class, null)).get()).collect(Collectors.toSet());
+            assertEquals(PooledProvider.MAX, instances.size());
+        }
+
+        @Nested
+        class WithQualifier {
+            @Test
+            public void should_not_be_singleton_scope_by_default() {
+                config.bind(NotSingleton.class, NotSingleton.class, new TypeBinding.WithQualifier.SkyWalkerLiteral());
+                Context context = config.getContext();
+                assertNotSame(context.get(ComponentRef.of(NotSingleton.class, new TypeBinding.WithQualifier.SkyWalkerLiteral())).get(), context.get(ComponentRef.of(NotSingleton.class, new TypeBinding.WithQualifier.SkyWalkerLiteral())).get());
+            }
+
+            @Test
+            public void should_bind_component_as_singleton() {
+                config.bind(NotSingleton.class, NotSingleton.class, new SingletonLiteral(), new TypeBinding.WithQualifier.SkyWalkerLiteral());
+                Context context = config.getContext();
+                assertSame(context.get(ComponentRef.of(NotSingleton.class, new TypeBinding.WithQualifier.SkyWalkerLiteral())).get(), context.get(ComponentRef.of(NotSingleton.class, new TypeBinding.WithQualifier.SkyWalkerLiteral())).get());
+            }
+        }
     }
 
     @Nested
@@ -206,6 +310,11 @@ public class ContainerTest {
                 this.dependencyProvider = dependencyProvider;
             }
         }
+        @Singleton
+        static class SingletonMissingDependency {
+            @Inject
+            Provider<Dependency> dependencyProvider;
+        }
 
         private static Stream<Arguments> should_throw_exception_if_dependency_not_found() {
             return Stream.of(
@@ -215,6 +324,7 @@ public class ContainerTest {
                     ,Arguments.of(Named.of("Constructor provider injection", ComponentWithProviderInjectionConstructor.class))
                     ,Arguments.of(Named.of("Field provider injection", ComponentWithProviderInjectionField.class))
                     ,Arguments.of(Named.of("Method provider injection", ComponentWithProviderInjectionMethod.class))
+                    ,Arguments.of(Named.of("Singleton", SingletonMissingDependency.class))
             );
         }
 
@@ -297,7 +407,7 @@ public class ContainerTest {
             config.bind(TestComponent.class, ComponentWithInjectionConstructor.class);
             config.bind(Dependency.class, DependencyDependedProvidedComponentWithConstructor.class);
             Context context = config.getContext();
-            assertTrue(context.getType(ComponentRef.of(TestComponent.class)).isPresent());
+            assertTrue(context.get(ComponentRef.of(TestComponent.class)).isPresent());
         }
 
         @Nested
