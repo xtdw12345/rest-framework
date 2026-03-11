@@ -11,12 +11,13 @@ import jakarta.inject.Singleton;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.*;
-import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class ContextConfig {
 
     private final Map<Component, ComponentProvider<?>> components = new HashMap<>();
-    private Map<Class<?>, Function<ComponentProvider<?>, ComponentProvider<?>>> scopes = new HashMap<>();
+    private Map<Class<?>, ScopeProvider> scopes = new HashMap<>();
 
     public ContextConfig() {
         scopes.put(Singleton.class, SingleProvider::new);
@@ -39,52 +40,54 @@ public class ContextConfig {
         bind(componentType, componentImplClass, componentImplClass.getAnnotations());
     }
 
-    public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> componentClass, Class<ComponentImplTpe> componentImplClass,  Annotation... annotations) {
-        if (Arrays.stream(annotations).map(Annotation::annotationType).anyMatch(a -> !a.isAnnotationPresent(Qualifier.class) && !a.isAnnotationPresent(Scope.class))) {
+    public <ComponentType, ComponentImplTpe extends ComponentType> void bind(Class<ComponentType> type, Class<ComponentImplTpe> implementation,  Annotation... annotations) {
+        Map<Class<? extends Annotation>, List<Annotation>> typeAnnotationsMap = Arrays.stream(annotations).collect(Collectors.groupingBy(ContextConfig::toType));
+
+        if (typeAnnotationsMap.containsKey(IllegalAnnotation.class)) {
             throw new IllegalComponentException();
         }
-        List<Annotation> qualifiers = Arrays.stream(annotations).filter(a -> a.annotationType().isAnnotationPresent(Qualifier.class)).toList();
-        List<Annotation> annotatedScopes = Arrays.stream(annotations).filter(a -> a.annotationType().isAnnotationPresent(Scope.class)).toList();
-        if (annotatedScopes.isEmpty()) {
-            annotatedScopes = Arrays.stream(componentImplClass.getAnnotations()).filter(a -> a.annotationType().isAnnotationPresent(Scope.class)).toList();
+        if (typeAnnotationsMap.getOrDefault(Scope.class, List.of()).size() > 1) {
+            throw new IllegalComponentException();
         }
+        List<Annotation> qualifiers = typeAnnotationsMap.getOrDefault(Qualifier.class, List.of());
+        Optional<Annotation> scope = typeAnnotationsMap.getOrDefault(Scope.class, scopeFrom(implementation)).stream().findFirst();
+        bind(type, qualifiers, createScopeProvider(scope, new InjectionProvider<>(implementation)));
+    }
 
-        ComponentProvider<?> provider = new InjectionProvider<>(componentImplClass);
-        if (!annotatedScopes.isEmpty()) {
-            provider = scopes.get(annotatedScopes.get(0).annotationType()).apply(provider);
-        }
+    private ComponentProvider<?> createScopeProvider(Optional<Annotation> scope, ComponentProvider<?> provider) {
+        return scope.<ComponentProvider<?>>map(s -> getComponentProvider(s, provider)).orElse(provider);
+    }
+
+    private <ComponentType> void bind(Class<ComponentType> componentClass, List<Annotation> qualifiers, ComponentProvider<?> injectProvider) {
         if(qualifiers.isEmpty()) {
-            components.put(new Component(componentClass, null), provider);
+            components.put(new Component(componentClass, null), injectProvider);
         }
         for (Annotation qualifier : qualifiers){
-            components.put(new Component(componentClass, qualifier), provider);
+            components.put(new Component(componentClass, qualifier), injectProvider);
         }
     }
 
-    public <ScopeType extends Annotation> void scope(Class<ScopeType> scopeType, Function<ComponentProvider<?>, ComponentProvider<?>> providerFactory) {
-        scopes.put(scopeType, providerFactory);
+    private ComponentProvider<?> getComponentProvider(Annotation s, ComponentProvider<?> finalProvider) {
+        if(!scopes.containsKey(s.annotationType())) {
+            throw new IllegalComponentException();
+        }
+        return scopes.get(s.annotationType()).create(finalProvider);
     }
 
-    static class SingleProvider<T> implements  ComponentProvider<T> {
-        private T singleton;
-        private ComponentProvider<T> provider;
+    private static <ComponentType, ComponentImplTpe extends ComponentType> List<Annotation> scopeFrom(Class<ComponentImplTpe> componentImplClass) {
+        return Arrays.stream(componentImplClass.getAnnotations()).filter(a -> a.annotationType().isAnnotationPresent(Scope.class)).toList();
+    }
 
-        public SingleProvider(ComponentProvider<T> provider) {
-            this.provider = provider;
-        }
+    private static Class<? extends Annotation> toType(Annotation a) {
+        return Stream.of(Qualifier.class, Scope.class).filter(t -> a.annotationType().isAnnotationPresent(t)).findFirst().orElse(IllegalAnnotation.class);
+    }
 
-        @Override
-        public T get(Context context) {
-            if (singleton == null) {
-                singleton = provider.get(context);
-            }
-            return singleton;
-        }
+    @interface IllegalAnnotation {
 
-        @Override
-        public List<ComponentRef<?>> getDependencyRefs() {
-            return provider.getDependencyRefs();
-        }
+    }
+
+    public <ScopeType extends Annotation> void scope(Class<ScopeType> scopeType, ScopeProvider scopeProvider) {
+        scopes.put(scopeType, scopeProvider);
     }
 
     public Context getContext() {
@@ -130,13 +133,4 @@ public class ContextConfig {
             }
         }
     }
-
-    interface ComponentProvider<T> {
-        T get(Context context);
-
-        default List<ComponentRef<?>> getDependencyRefs() {
-            return List.of();
-        }
-    }
-
 }

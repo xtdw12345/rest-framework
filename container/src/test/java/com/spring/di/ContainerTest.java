@@ -227,13 +227,13 @@ public class ContainerTest {
 
         }
 
-        static class PooledProvider<T> implements ContextConfig.ComponentProvider<T> {
+        static class PooledProvider<T> implements ComponentProvider<T> {
             private static final int MAX = 2;
             private int current = 0;
             private List<T> instances = new ArrayList<>();
-            private ContextConfig.ComponentProvider<T> provider;
+            private ComponentProvider<T> provider;
 
-            public PooledProvider(ContextConfig.ComponentProvider<T> provider) {
+            public PooledProvider(ComponentProvider<T> provider) {
                 this.provider = provider;
             }
 
@@ -258,6 +258,34 @@ public class ContainerTest {
             Context context = config.getContext();
             Set<PooledComponent> instances = IntStream.range(1, 5).mapToObj(i -> context.get(ComponentRef.of(PooledComponent.class, null)).get()).collect(Collectors.toSet());
             assertEquals(PooledProvider.MAX, instances.size());
+        }
+
+        record PooledLiteral() implements Pooled {
+
+            @Override
+            public Class<? extends Annotation> annotationType() {
+                return Pooled.class;
+            }
+        }
+
+        @Test
+        public void should_throw_exception_if_multi_scope_provided() {
+            assertThrows(IllegalComponentException.class, () -> config.bind(PooledComponent.class, PooledComponent.class, new SingletonLiteral(), new PooledLiteral()));
+        }
+
+        @Singleton @Pooled
+        static class MultiScopeAnnotated {
+
+        }
+
+        @Test
+        public void should_throw_exception_if_multi_scope_annotated() {
+            assertThrows(IllegalComponentException.class, () -> config.bind(MultiScopeAnnotated.class, MultiScopeAnnotated.class));
+        }
+
+        @Test
+        public void should_throw_exception_if_scope_undefined() {
+            assertThrows(IllegalComponentException.class, () -> config.bind(PooledComponent.class, PooledComponent.class, new PooledLiteral()));
         }
 
         @Nested
